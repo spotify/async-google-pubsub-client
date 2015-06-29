@@ -1,0 +1,13 @@
+async-google-pubsub-client
+Copyright 2011-2015 Spotify AB
+
+This product includes software developed at
+Spotify AB (http://www.spotify.com/).
+
+This project uses google-api-client from Google, which is licensed with Apache Licence 2.0.
+
+This project uses google-http-client from Google, which is licensed with Apache Licence 2.0.
+
+This project uses guava from Google, which is licensed with Apache Licence 2.0.
+
+This project uses vert.x which is licensed with Apache Licence 2.0.
