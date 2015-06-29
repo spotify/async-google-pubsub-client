@@ -23,6 +23,12 @@ import com.google.api.client.repackaged.com.google.common.base.Throwables;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.vertx.java.core.Vertx;
+import org.vertx.java.core.VertxFactory;
+import org.vertx.java.core.buffer.Buffer;
+import org.vertx.java.core.http.HttpClient;
+import org.vertx.java.core.http.HttpClientRequest;
+import org.vertx.java.core.http.HttpHeaders;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -32,19 +38,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import io.vertx.core.Vertx;
-import io.vertx.core.buffer.Buffer;
-import io.vertx.core.http.HttpClient;
-import io.vertx.core.http.HttpClientOptions;
-import io.vertx.core.http.HttpClientRequest;
-import io.vertx.core.http.HttpHeaders;
-import io.vertx.core.http.HttpMethod;
+import io.netty.handler.codec.http.HttpMethod;
 
 import static com.google.common.util.concurrent.MoreExecutors.getExitingScheduledExecutorService;
-import static io.vertx.core.http.HttpMethod.DELETE;
-import static io.vertx.core.http.HttpMethod.GET;
-import static io.vertx.core.http.HttpMethod.POST;
-import static io.vertx.core.http.HttpMethod.PUT;
+import static io.netty.handler.codec.http.HttpMethod.DELETE;
+import static io.netty.handler.codec.http.HttpMethod.GET;
+import static io.netty.handler.codec.http.HttpMethod.POST;
+import static io.netty.handler.codec.http.HttpMethod.PUT;
 
 /**
  * The Datastore class encapsulates the Cloud Datastore API and handles
@@ -75,19 +75,18 @@ public class Pubsub implements Closeable {
 
   private volatile String accessToken;
 
-  private static final Vertx vertx = Vertx.vertx();
+  private static final Vertx vertx = VertxFactory.newVertx();
   private final Credential credential;
 
   private Pubsub(final Builder builder) {
-    this.client = vertx.createHttpClient(
-        new HttpClientOptions()
-            .setKeepAlive(true)
-            .setDefaultHost(builder.uri.getHost())
-            .setDefaultPort(defaultPort(builder.uri))
-            .setConnectTimeout(builder.connectTimeout)
-            .setMaxPoolSize(builder.maxConnections)
-            .setTryUseCompression(true)
-            .setSsl(true));
+    this.client = vertx.createHttpClient();
+    this.client.setKeepAlive(true);
+    this.client.setHost(builder.uri.getHost());
+    this.client.setPort(defaultPort(builder.uri));
+    this.client.setConnectTimeout(builder.connectTimeout);
+    this.client.setMaxPoolSize(builder.maxConnections);
+    this.client.setTryUseCompression(true);
+    this.client.setSSL(true);
 
     if (builder.credential == null) {
       this.credential = defaultCredential();
@@ -246,42 +245,42 @@ public class Pubsub implements Closeable {
 
     log.debug("{} {}", method, uri);
 
-    final HttpClientRequest request = client.request(method, uri);
+    final CompletableFuture<T> future = new CompletableFuture<>();
+
+    final HttpClientRequest request = client.request(
+        method.toString(), uri,
+        response -> {
+          // Return null for 404'd GET requests
+          if (response.statusCode() == 404 && method == GET) {
+            future.complete(null);
+            return;
+          }
+
+          // Fail on non-2xx responses
+          if (!isSuccessful(response.statusCode())) {
+            future.completeExceptionally(
+                new RequestFailedException(response.statusCode(), response.statusMessage()));
+            return;
+          }
+
+          if (responseClass == Void.class) {
+            future.complete(null);
+            return;
+          }
+
+          // Parse response body
+          response.bodyHandler(body -> {
+            try {
+              future.complete(Json.read(body, responseClass));
+            } catch (IOException e) {
+              future.completeExceptionally(e);
+            }
+          });
+        });
 
     request.putHeader("Authorization", "Bearer " + accessToken);
     request.putHeader("User-Agent", USER_AGENT);
     request.putHeader("Accept-Encoding", "gzip");
-
-    final CompletableFuture<T> future = new CompletableFuture<>();
-    request.handler(response -> {
-
-      // Return null for 404'd GET requests
-      if (response.statusCode() == 404 && method == GET) {
-        future.complete(null);
-        return;
-      }
-
-      // Fail on non-2xx responses
-      if (!isSuccessful(response.statusCode())) {
-        future.completeExceptionally(
-            new RequestFailedException(response.statusCode(), response.statusMessage()));
-        return;
-      }
-
-      if (responseClass == Void.class) {
-        future.complete(null);
-        return;
-      }
-
-      // Parse response body
-      response.bodyHandler(body -> {
-        try {
-          future.complete(Json.read(body, responseClass));
-        } catch (IOException e) {
-          future.completeExceptionally(e);
-        }
-      });
-    });
 
     // Write JSON payload
     if (payload != NO_PAYLOAD) {
@@ -299,7 +298,7 @@ public class Pubsub implements Closeable {
   }
 
   private Buffer json(final Object value) {
-    final Buffer body = Buffer.buffer();
+    final Buffer body = new Buffer();
     try {
       Json.writer().writeValue(new BufferOutputStream(body), value);
     } catch (IOException e) {

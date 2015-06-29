@@ -21,10 +21,11 @@ import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 
+import org.vertx.java.core.buffer.Buffer;
+
 import java.io.IOException;
 
 import io.norberg.automatter.jackson.AutoMatterModule;
-import io.vertx.core.buffer.Buffer;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY;
 

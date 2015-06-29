@@ -16,10 +16,10 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
+import org.vertx.java.core.buffer.Buffer;
+
 import java.io.IOException;
 import java.io.OutputStream;
-
-import io.vertx.core.buffer.Buffer;
 
 import static java.util.Objects.requireNonNull;
 
