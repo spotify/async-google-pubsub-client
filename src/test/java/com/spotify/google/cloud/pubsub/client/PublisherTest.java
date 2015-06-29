@@ -3,6 +3,8 @@ package com.spotify.google.cloud.pubsub.client;
 import com.google.common.io.BaseEncoding;
 import com.google.common.util.concurrent.Futures;
 
+import com.spotify.logging.LoggingConfigurator;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -14,6 +16,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 
+import static com.spotify.logging.LoggingConfigurator.Level.WARN;
 import static java.lang.System.out;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.IntStream.range;
@@ -68,6 +71,9 @@ public class PublisherTest {
   @Test
   public void benchPublish()
       throws UnsupportedEncodingException, ExecutionException, InterruptedException {
+
+    LoggingConfigurator.configureDefaults("benchmark", WARN);
+
     final String data = BaseEncoding.base64().encode("hello world".getBytes("UTF-8"));
     final Message message = Message.builder().data(data).build();
     final ProgressMeter meter = new ProgressMeter("messages", true);
