@@ -20,16 +20,22 @@ import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.googleapis.util.Utils;
 import com.google.api.client.repackaged.com.google.common.base.Throwables;
+import com.google.common.net.HttpHeaders;
 
+import com.ning.http.client.AsyncHandler;
+import com.ning.http.client.AsyncHttpClient;
+import com.ning.http.client.AsyncHttpClientConfig;
+import com.ning.http.client.HttpResponseBodyPart;
+import com.ning.http.client.HttpResponseHeaders;
+import com.ning.http.client.HttpResponseStatus;
+import com.ning.http.client.Request;
+import com.ning.http.client.RequestBuilder;
+
+import org.jboss.netty.handler.codec.http.HttpMethod;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.vertx.java.core.Vertx;
-import org.vertx.java.core.VertxFactory;
-import org.vertx.java.core.buffer.Buffer;
-import org.vertx.java.core.http.HttpClient;
-import org.vertx.java.core.http.HttpClientRequest;
-import org.vertx.java.core.http.HttpHeaders;
 
+import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
@@ -38,23 +44,15 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import io.netty.handler.codec.http.HttpMethod;
-
 import static com.google.common.util.concurrent.MoreExecutors.getExitingScheduledExecutorService;
-import static io.netty.handler.codec.http.HttpMethod.DELETE;
-import static io.netty.handler.codec.http.HttpMethod.GET;
-import static io.netty.handler.codec.http.HttpMethod.POST;
-import static io.netty.handler.codec.http.HttpMethod.PUT;
+import static com.spotify.google.cloud.pubsub.client.Topic.canonicalTopic;
+import static com.spotify.google.cloud.pubsub.client.Topic.validateCanonicalTopic;
 
 /**
- * The Datastore class encapsulates the Cloud Datastore API and handles
- * calling the datastore backend.
- * <p>
- * To create a Datastore object, call the static method {@code Datastore.create()}
- * passing configuration. A scheduled task will begin that automatically refreshes
- * the API access token for you.
- * <p>
- * Call {@code close()} to perform all necessary clean up.
+ * The Datastore class encapsulates the Cloud Datastore API and handles calling the datastore backend. <p> To create a
+ * Datastore object, call the static method {@code Datastore.create()} passing configuration. A scheduled task will
+ * begin that automatically refreshes the API access token for you. <p> Call {@code close()} to perform all necessary
+ * clean up.
  */
 public class Pubsub implements Closeable {
 
@@ -66,27 +64,24 @@ public class Pubsub implements Closeable {
 
   private static final Object NO_PAYLOAD = new Object();
 
-  private final HttpClient client;
+  // TODO (dano): make this shared across Pubsub instances
+  private final AsyncHttpClient client;
+  private final String baseUri;
+  private final Credential credential;
+  private final CompletableFuture<Void> closeFuture = new CompletableFuture<>();
 
   private final ScheduledExecutorService executor = getExitingScheduledExecutorService(
       new ScheduledThreadPoolExecutor(1));
 
-  private final String baseUri;
-
   private volatile String accessToken;
 
-  private static final Vertx vertx = VertxFactory.newVertx();
-  private final Credential credential;
-
   private Pubsub(final Builder builder) {
-    this.client = vertx.createHttpClient();
-    this.client.setKeepAlive(true);
-    this.client.setHost(builder.uri.getHost());
-    this.client.setPort(defaultPort(builder.uri));
-    this.client.setConnectTimeout(builder.connectTimeout);
-    this.client.setMaxPoolSize(builder.maxConnections);
-    this.client.setTryUseCompression(true);
-    this.client.setSSL(true);
+    this.client = new AsyncHttpClient(new AsyncHttpClientConfig.Builder()
+                                          .setConnectTimeout(builder.connectTimeout)
+                                          .setMaxConnections(builder.maxConnections)
+                                          .setMaxConnectionsPerHost(builder.maxConnections)
+                                          .setCompressionEnforced(true)
+                                          .build());
 
     if (builder.credential == null) {
       this.credential = defaultCredential();
@@ -94,7 +89,7 @@ public class Pubsub implements Closeable {
       this.credential = builder.credential;
     }
 
-    this.baseUri = stripTrailingSlash(builder.uri.getRawPath());
+    this.baseUri = stripTrailingSlash(builder.uri.toString());
 
     // Get initial access token
     refreshAccessToken();
@@ -137,6 +132,11 @@ public class Pubsub implements Closeable {
   public void close() {
     executor.shutdown();
     client.close();
+//    vertx.stop();
+  }
+
+  public CompletableFuture<Void> closeFuture() {
+    return closeFuture.thenApply(ignore -> null);
   }
 
   private void refreshAccessToken() {
@@ -190,24 +190,39 @@ public class Pubsub implements Closeable {
 
   public CompletableFuture<Topic> createTopic(final String project,
                                               final String topic) {
-    return createTopic(project, topic, Topic.of(topic));
+    return createTopic(canonicalTopic(project, topic));
   }
 
-  public CompletableFuture<Topic> createTopic(final String project,
-                                              final String topic,
+  public CompletableFuture<Topic> createTopic(final String canonicalTopic) {
+    return createTopic(canonicalTopic, Topic.of(canonicalTopic));
+  }
+
+  public CompletableFuture<Topic> createTopic(final String canonicalTopic,
                                               final Topic req) {
-    final String uri = baseUri + "/projects/" + project + "/topics/" + topic;
+    validateCanonicalTopic(canonicalTopic);
+    final String uri = baseUri + "/" + canonicalTopic;
     return put(uri, req, Topic.class);
   }
 
   public CompletableFuture<Topic> getTopic(final String project, final String topic) {
-    final String uri = baseUri + "/projects/" + project + "/topics/" + topic;
+    final String uri = baseUri + "/" + canonicalTopic(project, topic);
+    return get(uri, Topic.class);
+  }
+
+  public CompletableFuture<Topic> getTopic(final String canonicalTopic) {
+    validateCanonicalTopic(canonicalTopic);
+    final String uri = baseUri + "/" + canonicalTopic;
     return get(uri, Topic.class);
   }
 
   public CompletableFuture<Void> deleteTopic(final String project,
                                              final String topic) {
-    final String uri = baseUri + "/projects/" + project + "/topics/" + topic;
+    return deleteTopic(canonicalTopic(project, topic));
+  }
+
+  public CompletableFuture<Void> deleteTopic(final String canonicalTopic) {
+    validateCanonicalTopic(canonicalTopic);
+    final String uri = baseUri + "/" + canonicalTopic;
     return delete(uri, Void.class);
   }
 
@@ -218,21 +233,21 @@ public class Pubsub implements Closeable {
   }
 
   private <T> CompletableFuture<T> get(final String uri, final Class<T> responseClass) {
-    return request(GET, uri, responseClass);
+    return request(HttpMethod.GET, uri, responseClass);
   }
 
   private <T> CompletableFuture<T> post(final String uri, final Object payload,
                                         final Class<T> responseClass) {
-    return request(POST, uri, responseClass, payload);
+    return request(HttpMethod.POST, uri, responseClass, payload);
   }
 
   private <T> CompletableFuture<T> put(final String uri, final Object payload,
                                        final Class<T> responseClass) {
-    return request(PUT, uri, responseClass, payload);
+    return request(HttpMethod.PUT, uri, responseClass, payload);
   }
 
   private <T> CompletableFuture<T> delete(final String uri, final Class<T> responseClass) {
-    return request(DELETE, uri, responseClass);
+    return request(HttpMethod.DELETE, uri, responseClass);
   }
 
   private <T> CompletableFuture<T> request(final HttpMethod method, final String uri,
@@ -243,68 +258,78 @@ public class Pubsub implements Closeable {
   private <T> CompletableFuture<T> request(final HttpMethod method, final String uri,
                                            final Class<T> responseClass, final Object payload) {
 
-    log.debug("{} {}", method, uri);
+
+    final RequestBuilder builder = new RequestBuilder()
+        .setUrl(uri)
+        .setMethod(method.toString())
+        .setHeader("Authorization", "Bearer " + accessToken)
+        .setHeader("User-Agent", USER_AGENT)
+        .setHeader("Accept-Encoding", "gzip");
+
+    if (payload != NO_PAYLOAD) {
+      final byte[] json = Json.write(payload);
+      builder.setHeader(HttpHeaders.CONTENT_LENGTH, String.valueOf(json.length));
+      builder.setBody(json);
+    }
+
+    final Request request = builder.build();
 
     final CompletableFuture<T> future = new CompletableFuture<>();
+    client.executeRequest(request, new AsyncHandler<Void>() {
+      private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 
-    final HttpClientRequest request = client.request(
-        method.toString(), uri,
-        response -> {
-          // Return null for 404'd GET requests
-          if (response.statusCode() == 404 && method == GET) {
-            future.complete(null);
-            return;
-          }
-
-          // Fail on non-2xx responses
-          if (!isSuccessful(response.statusCode())) {
-            future.completeExceptionally(
-                new RequestFailedException(response.statusCode(), response.statusMessage()));
-            return;
-          }
-
-          if (responseClass == Void.class) {
-            future.complete(null);
-            return;
-          }
-
-          // Parse response body
-          response.bodyHandler(body -> {
-            try {
-              future.complete(Json.read(body, responseClass));
-            } catch (IOException e) {
-              future.completeExceptionally(e);
-            }
-          });
-        });
-
-    request.putHeader("Authorization", "Bearer " + accessToken);
-    request.putHeader("User-Agent", USER_AGENT);
-    request.putHeader("Accept-Encoding", "gzip");
-
-    // Write JSON payload
-    if (payload != NO_PAYLOAD) {
-      final Buffer json = json(payload);
-      if (log.isDebugEnabled()) {
-        log.debug(json.toString("UTF-8"));
+      @Override
+      public void onThrowable(final Throwable t) {
+        future.completeExceptionally(t);
       }
-      request.putHeader(HttpHeaders.CONTENT_LENGTH, String.valueOf(json.length()));
-      request.write(json);
-    }
 
-    request.end();
+      @Override
+      public STATE onBodyPartReceived(final HttpResponseBodyPart bodyPart) throws Exception {
+        bytes.write(bodyPart.getBodyPartBytes());
+        return STATE.CONTINUE;
+      }
+
+      @Override
+      public STATE onStatusReceived(final HttpResponseStatus status) throws Exception {
+
+        // Return null for 404'd GET & DELETE requests
+        if (status.getStatusCode() == 404 && method == HttpMethod.GET || method == HttpMethod.DELETE) {
+          future.complete(null);
+          return STATE.ABORT;
+        }
+
+        // Fail on non-2xx responses
+        if (!isSuccessful(status.getStatusCode())) {
+          future.completeExceptionally(
+              new RequestFailedException(status.getStatusCode(), status.getStatusText()));
+          return STATE.ABORT;
+        }
+
+        if (responseClass == Void.class) {
+          future.complete(null);
+          return STATE.ABORT;
+        }
+
+        return STATE.CONTINUE;
+      }
+
+      @Override
+      public STATE onHeadersReceived(final HttpResponseHeaders headers) throws Exception {
+        return STATE.CONTINUE;
+      }
+
+      @Override
+      public Void onCompleted() throws Exception {
+        try {
+          future.complete(Json.read(bytes.toByteArray(), responseClass));
+        } catch (IOException e) {
+          future.completeExceptionally(e);
+        }
+        return null;
+      }
+    });
 
     return future;
-  }
-
-  private Buffer json(final Object value) {
-    final Buffer body = new Buffer();
-    try {
-      Json.writer().writeValue(new BufferOutputStream(body), value);
-    } catch (IOException e) {
-      throw Throwables.propagate(e);
-    }
-    return body;
   }
 
   public static Pubsub create() {
@@ -338,8 +363,7 @@ public class Pubsub implements Closeable {
     }
 
     /**
-     * Set the maximum time in milliseconds the client will can wait
-     * when connecting to a remote host.
+     * Set the maximum time in milliseconds the client will can wait when connecting to a remote host.
      *
      * @param connectTimeout the maximum time in milliseconds.
      * @return this config builder.
@@ -361,11 +385,8 @@ public class Pubsub implements Closeable {
     }
 
     /**
-     * Set Pubsub credentials to ues when requesting an access token.
-     * <p>
-     * Credentials can be generated by calling
-     * {@code PubsubHelper.getComputeEngineCredential} or
-     * {@code PubsubHelper.getServiceAccountCredential}
+     * Set Pubsub credentials to ues when requesting an access token. <p> Credentials can be generated by calling {@code
+     * PubsubHelper.getComputeEngineCredential} or {@code PubsubHelper.getServiceAccountCredential}
      *
      * @param credential the credentials used to authenticate.
      * @return this config builder.
@@ -376,8 +397,8 @@ public class Pubsub implements Closeable {
     }
 
     /**
-     * The Pubsub service URI. By default, this is the Google
-     * Pubsub provider, however you may run a local Developer Server.
+     * The Pubsub service URI. By default, this is the Google Pubsub provider, however you may run a local Developer
+     * Server.
      *
      * @param uri the service to connect to.
      * @return this config builder.
@@ -387,5 +408,4 @@ public class Pubsub implements Closeable {
       return this;
     }
   }
-
 }

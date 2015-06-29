@@ -27,7 +27,24 @@ public interface Topic {
     return new TopicBuilder();
   }
 
-  static Topic of(String topic) {
-    return builder().name(topic).build();
+  static Topic of(String project, String topic) {
+    return of(canonicalTopic(project, topic));
+  }
+
+  static Topic of(String canonicalTopic) {
+    return builder().name(canonicalTopic).build();
+  }
+
+  static String canonicalTopic(final String project, final String topic) {
+    if (topic.contains("/")) {
+      throw new IllegalArgumentException();
+    }
+    return "projects/" + project + "/topics/" + topic;
+  }
+
+  static void validateCanonicalTopic(final String canonicalTopic) {
+    if (!canonicalTopic.startsWith("projects/")) {
+      throw new IllegalArgumentException();
+    }
   }
 }

@@ -28,5 +28,4 @@ public class PubsubException extends Exception {
   public PubsubException(final String message, final Throwable cause) {
     super(message, cause);
   }
-
 }

@@ -16,12 +16,11 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectReader;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.google.api.client.repackaged.com.google.common.base.Throwables;
 
-import org.vertx.java.core.buffer.Buffer;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 
 import java.io.IOException;
 
@@ -36,19 +35,15 @@ class Json {
       .registerModule(new AutoMatterModule())
       .registerModule(new Jdk8Module());
 
-  private static final ObjectReader READER = MAPPER.reader();
-
-  private static final ObjectWriter WRITER = MAPPER.writer();
-
-  static ObjectReader reader() {
-    return READER;
+  static <T> T read(final byte[] buffer, final Class<T> cls) throws IOException {
+    return MAPPER.readValue(buffer, cls);
   }
 
-  static ObjectWriter writer() {
-    return WRITER;
-  }
-
-  static <T> T read(final Buffer buffer, final Class<T> cls) throws IOException {
-    return MAPPER.readValue(new BufferInputStream(buffer), cls);
+  static byte[] write(final Object value) {
+    try {
+      return MAPPER.writeValueAsBytes(value);
+    } catch (JsonProcessingException e) {
+      throw Throwables.propagate(e);
+    }
   }
 }

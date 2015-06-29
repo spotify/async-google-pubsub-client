@@ -1,13 +1,26 @@
+/*
+ * Copyright (c) 2011-2015 Spotify AB
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.spotify.google.cloud.pubsub.client;
 
 import com.google.common.io.BaseEncoding;
 import com.google.common.util.concurrent.Futures;
 
-import com.spotify.logging.LoggingConfigurator;
-
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.UnsupportedEncodingException;
@@ -16,13 +29,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 
-import static com.spotify.logging.LoggingConfigurator.Level.WARN;
 import static java.lang.System.out;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.IntStream.range;
 
 public class PublisherTest {
-
 
   private final String PROJECT = Util.defaultProject();
 
@@ -33,8 +44,11 @@ public class PublisherTest {
 
   @Before
   public void setUp() throws ExecutionException, InterruptedException {
-    pubsub = Pubsub.create();
+    pubsub = Pubsub.builder()
+        .maxConnections(20)
+        .build();
     publisher = Publisher.builder()
+        .concurrency(20)
         .pubsub(pubsub)
         .project(PROJECT)
         .build();
@@ -65,41 +79,5 @@ public class PublisherTest {
     futures.stream()
         .map(Futures::getUnchecked)
         .forEach(id -> out.println("message id: " + id));
-  }
-
-  @Ignore
-  @Test
-  public void benchPublish()
-      throws UnsupportedEncodingException, ExecutionException, InterruptedException {
-
-    LoggingConfigurator.configureDefaults("benchmark", WARN);
-
-    final String data = BaseEncoding.base64().encode("hello world".getBytes("UTF-8"));
-    final Message message = Message.builder().data(data).build();
-    final ProgressMeter meter = new ProgressMeter("messages", true);
-
-    for (int i = 0; i < 5000; i++) {
-      benchSend(publisher, message, meter);
-    }
-
-    while (true) {
-      Thread.sleep(1000);
-    }
-  }
-
-  private void benchSend(final Publisher publisher, final Message message,
-                         final ProgressMeter meter) {
-    final CompletableFuture<String> future = publisher.publish(TOPIC, message);
-    final long start = System.nanoTime();
-    future.whenComplete((s, ex) -> {
-      if (ex != null) {
-        ex.printStackTrace();
-        return;
-      }
-      final long end = System.nanoTime();
-      final long latency = end - start;
-      meter.inc(1, latency);
-      benchSend(publisher, message, meter);
-    });
   }
 }

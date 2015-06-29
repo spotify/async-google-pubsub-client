@@ -25,12 +25,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static com.google.common.util.concurrent.MoreExecutors.getExitingExecutorService;
 
 public class Publisher implements Closeable {
 
@@ -38,21 +33,18 @@ public class Publisher implements Closeable {
   private final String project;
   private final int queueSize;
   private final int batchSize;
+  private final int concurrency;
 
-  private final ExecutorService executor;
+  private final AtomicInteger outstanding = new AtomicInteger();
 
   private final ConcurrentMap<String, TopicQueue> topics = new ConcurrentHashMap<>();
 
   private Publisher(final Builder builder) {
     this.pubsub = Objects.requireNonNull(builder.pubsub, "pubsub");
     this.project = Objects.requireNonNull(builder.project, "project");
+    this.concurrency = builder.concurrency;
     this.batchSize = builder.batchSize;
-    this.queueSize = Optional.ofNullable(builder.queueSize).orElseGet(() -> batchSize * 10);
-    this.executor = executorService(builder.concurrency);
-  }
-
-  private static ExecutorService executorService(final int n) {
-    return getExitingExecutorService((ThreadPoolExecutor) Executors.newFixedThreadPool(n));
+    this.queueSize = Optional.ofNullable(builder.queueSize).orElseGet(() -> batchSize * concurrency * 10);
   }
 
   public CompletableFuture<String> publish(final String topic, final Message message) {
@@ -62,16 +54,13 @@ public class Publisher implements Closeable {
 
   @Override
   public void close() {
-    executor.shutdown();
   }
 
-  private class TopicQueue implements Runnable {
+  private class TopicQueue {
 
     private final AtomicInteger size = new AtomicInteger();
     private final ConcurrentLinkedQueue<QueuedMessage> queue = new ConcurrentLinkedQueue<>();
     private final String topic;
-
-    private volatile boolean scheduled;
 
     public TopicQueue(final String topic) {
       this.topic = topic;
@@ -92,18 +81,16 @@ public class Publisher implements Closeable {
 
       queue.add(new QueuedMessage(message, future));
 
-      if (!scheduled) {
-        scheduled = true;
-        executor.execute(this);
-      }
+      send();
 
       return future;
     }
 
-    @Override
-    public void run() {
-      // Clear scheduled flag before draining queue
-      scheduled = false;
+    public void send() {
+      if (outstanding.get() >= concurrency) {
+        return;
+      }
+      outstanding.incrementAndGet();
 
       final PublishRequestBuilder builder = PublishRequest.builder();
       final List<CompletableFuture<String>> futures = new ArrayList<>();
@@ -127,6 +114,7 @@ public class Publisher implements Closeable {
       final PublishRequest request = builder.build();
       pubsub.publish(project, topic, request).whenComplete(
           (PublishResponse response, Throwable ex) -> {
+            outstanding.decrementAndGet();
 
             // Fail all futures if the batch request failed
             if (ex != null) {
