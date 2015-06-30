@@ -39,6 +39,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -47,12 +48,10 @@ import java.util.concurrent.TimeUnit;
 import static com.google.common.util.concurrent.MoreExecutors.getExitingScheduledExecutorService;
 import static com.spotify.google.cloud.pubsub.client.Topic.canonicalTopic;
 import static com.spotify.google.cloud.pubsub.client.Topic.validateCanonicalTopic;
+import static java.util.Arrays.asList;
 
 /**
- * The Datastore class encapsulates the Cloud Datastore API and handles calling the datastore backend. <p> To create a
- * Datastore object, call the static method {@code Datastore.create()} passing configuration. A scheduled task will
- * begin that automatically refreshes the API access token for you. <p> Call {@code close()} to perform all necessary
- * clean up.
+ * An async low-level Google Cloud Pub/Sub client.
  */
 public class Pubsub implements Closeable {
 
@@ -64,7 +63,6 @@ public class Pubsub implements Closeable {
 
   private static final Object NO_PAYLOAD = new Object();
 
-  // TODO (dano): make this shared across Pubsub instances
   private final AsyncHttpClient client;
   private final String baseUri;
   private final Credential credential;
@@ -128,17 +126,25 @@ public class Pubsub implements Closeable {
     }
   }
 
+  /**
+   * Close this {@link Pubsub} client.
+   */
   @Override
   public void close() {
     executor.shutdown();
     client.close();
-//    vertx.stop();
   }
 
+  /**
+   * Get a future that is completed when this {@link Pubsub} client is closed.
+   */
   public CompletableFuture<Void> closeFuture() {
     return closeFuture.thenApply(ignore -> null);
   }
 
+  /**
+   * Refresh the Google Cloud API access token, if necessary.
+   */
   private void refreshAccessToken() {
     final Long expiresIn = credential.getExpiresInSeconds();
 
@@ -157,15 +163,26 @@ public class Pubsub implements Closeable {
     }
   }
 
-  private boolean isSuccessful(final int statusCode) {
-    return statusCode >= 200 && statusCode < 300;
-  }
-
+  /**
+   * List the Pub/Sub topics in a project. This will get the first page of topics. To enumerate all topics you might
+   * have to make further calls to {@link #listTopics(String, String)} with the page token in order to get further
+   * pages.
+   *
+   * @param project The Google Cloud project.
+   * @return A future that is completed when this request is completed.
+   */
   public CompletableFuture<TopicList> listTopics(final String project) {
     final String uri = baseUri + "/projects/" + project + "/topics";
     return get(uri, TopicList.class);
   }
 
+  /**
+   * Get a page of Pub/Sub topics in a project using a specified page token.
+   *
+   * @param project   The Google Cloud project.
+   * @param pageToken A token for the page of topics to get.
+   * @return A future that is completed when this request is completed.
+   */
   public CompletableFuture<TopicList> listTopics(final String project,
                                                  final String pageToken) {
     final StringBuilder uri = new StringBuilder().append(baseUri)
@@ -176,88 +193,165 @@ public class Pubsub implements Closeable {
     return get(uri.toString(), TopicList.class);
   }
 
-  public CompletableFuture<TopicList> listTopics(final String project,
-                                                 final int pageSize,
-                                                 final String pageToken) {
-    final StringBuilder uri = new StringBuilder().append(baseUri)
-        .append("/projects/").append(project).append("/topics")
-        .append("?pageSize=").append(pageSize);
-    if (pageToken != null) {
-      uri.append("pageToken=").append(pageToken);
-    }
-    return get(uri.toString(), TopicList.class);
-  }
-
+  /**
+   * Create a Pub/Sub topic.
+   *
+   * @param project The Google Cloud project.
+   * @param topic   The name of the topic to create.
+   * @return A future that is completed when this request is completed.
+   */
   public CompletableFuture<Topic> createTopic(final String project,
                                               final String topic) {
     return createTopic(canonicalTopic(project, topic));
   }
 
+  /**
+   * Create a Pub/Sub topic.
+   *
+   * @param canonicalTopic The canonical (including project) name of the topic to create.
+   * @return A future that is completed when this request is completed.
+   */
   public CompletableFuture<Topic> createTopic(final String canonicalTopic) {
     return createTopic(canonicalTopic, Topic.of(canonicalTopic));
   }
 
-  public CompletableFuture<Topic> createTopic(final String canonicalTopic,
-                                              final Topic req) {
+  /**
+   * Create a Pub/Sub topic.
+   *
+   * @param canonicalTopic The canonical (including project) name of the topic to create.
+   * @param req            The payload of the create request. This seems to be ignore in the current API version.
+   * @return A future that is completed when this request is completed.
+   */
+  private CompletableFuture<Topic> createTopic(final String canonicalTopic,
+                                               final Topic req) {
     validateCanonicalTopic(canonicalTopic);
     final String uri = baseUri + "/" + canonicalTopic;
     return put(uri, req, Topic.class);
   }
 
+  /**
+   * Get a Pub/Sub topic.
+   *
+   * @param project The Google Cloud project.
+   * @param topic   The name of the topic to get.
+   * @return A future that is completed when this request is completed. The future will be completed with {@code null}
+   * if the response is 404.
+   */
   public CompletableFuture<Topic> getTopic(final String project, final String topic) {
     final String uri = baseUri + "/" + canonicalTopic(project, topic);
     return get(uri, Topic.class);
   }
 
+  /**
+   * Get a Pub/Sub topic.
+   *
+   * @param canonicalTopic The canonical (including project) name of the topic to get.
+   * @return A future that is completed when this request is completed. The future will be completed with {@code null}
+   * if the response is 404.
+   */
   public CompletableFuture<Topic> getTopic(final String canonicalTopic) {
     validateCanonicalTopic(canonicalTopic);
     final String uri = baseUri + "/" + canonicalTopic;
     return get(uri, Topic.class);
   }
 
+  /**
+   * Delete a Pub/Sub topic.
+   *
+   * @param project The Google Cloud project.
+   * @param topic   The name of the topic to delete.
+   * @return A future that is completed when this request is completed. The future will be completed with {@code null}
+   * if the response is 404.
+   */
   public CompletableFuture<Void> deleteTopic(final String project,
                                              final String topic) {
     return deleteTopic(canonicalTopic(project, topic));
   }
 
+  /**
+   * Delete a Pub/Sub topic.
+   *
+   * @param canonicalTopic The canonical (including project) name of the topic to delete.
+   * @return A future that is completed when this request is completed. The future will be completed with {@code null}
+   * if the response is 404.
+   */
   public CompletableFuture<Void> deleteTopic(final String canonicalTopic) {
     validateCanonicalTopic(canonicalTopic);
     final String uri = baseUri + "/" + canonicalTopic;
     return delete(uri, Void.class);
   }
 
-  public CompletableFuture<PublishResponse> publish(final String project, final String topic,
-                                                    final PublishRequest req) {
-    final String uri = baseUri + "/projects/" + project + "/topics/" + topic + ":publish";
-    return post(uri, req, PublishResponse.class);
+  /**
+   * Publish a batch of messages.
+   *
+   * @param project  The Google Cloud project.
+   * @param topic    The topic to publish on.
+   * @param messages The batch of messages.
+   * @return a future that is completed with a list of message ID's for the published messages.
+   */
+  public CompletableFuture<List<String>> publish(final String project, final String topic,
+                                                 final Message... messages) {
+    return publish(project, topic, asList(messages));
   }
 
+  /**
+   * Publish a batch of messages.
+   *
+   * @param project  The Google Cloud project.
+   * @param topic    The topic to publish on.
+   * @param messages The batch of messages.
+   * @return a future that is completed with a list of message ID's for the published messages.
+   */
+  public CompletableFuture<List<String>> publish(final String project, final String topic,
+                                                 final List<Message> messages) {
+    final String uri = baseUri + "/projects/" + project + "/topics/" + topic + ":publish";
+    return post(uri, PublishRequest.of(messages), PublishResponse.class)
+        .thenApply(PublishResponse::messageIds);
+  }
+
+  /**
+   * Make a GET request.
+   */
   private <T> CompletableFuture<T> get(final String uri, final Class<T> responseClass) {
     return request(HttpMethod.GET, uri, responseClass);
   }
 
+  /**
+   * Make a POST request.
+   */
   private <T> CompletableFuture<T> post(final String uri, final Object payload,
                                         final Class<T> responseClass) {
     return request(HttpMethod.POST, uri, responseClass, payload);
   }
 
+  /**
+   * Make a PUT request.
+   */
   private <T> CompletableFuture<T> put(final String uri, final Object payload,
                                        final Class<T> responseClass) {
     return request(HttpMethod.PUT, uri, responseClass, payload);
   }
 
+  /**
+   * Make a DELETE request.
+   */
   private <T> CompletableFuture<T> delete(final String uri, final Class<T> responseClass) {
     return request(HttpMethod.DELETE, uri, responseClass);
   }
 
+  /**
+   * Make an HTTP request.
+   */
   private <T> CompletableFuture<T> request(final HttpMethod method, final String uri,
                                            final Class<T> responseClass) {
     return request(method, uri, responseClass, NO_PAYLOAD);
   }
 
+  /**
+   * Make an HTTP request.
+   */
   private <T> CompletableFuture<T> request(final HttpMethod method, final String uri,
                                            final Class<T> responseClass, final Object payload) {
-
 
     final RequestBuilder builder = new RequestBuilder()
         .setUrl(uri)
@@ -299,7 +393,8 @@ public class Pubsub implements Closeable {
         }
 
         // Fail on non-2xx responses
-        if (!isSuccessful(status.getStatusCode())) {
+        final int statusCode = status.getStatusCode();
+        if (!(statusCode >= 200 && statusCode < 300)) {
           future.completeExceptionally(
               new RequestFailedException(status.getStatusCode(), status.getStatusText()));
           return STATE.ABORT;
@@ -332,14 +427,24 @@ public class Pubsub implements Closeable {
     return future;
   }
 
+  /**
+   * Create a new {@link Pubsub} client with default configuration.
+   */
   public static Pubsub create() {
     return builder().build();
   }
 
+  /**
+   * Create a new {@link Builder} that can be used to build a new {@link Pubsub} client.
+   */
   public static Builder builder() {
     return new Builder();
   }
 
+
+  /**
+   * A {@link Builder} that can be used to build a new {@link Pubsub} client.
+   */
   public static class Builder {
 
     private static final int DEFAULT_CONNECT_TIMEOUT = 5000;
@@ -385,11 +490,9 @@ public class Pubsub implements Closeable {
     }
 
     /**
-     * Set Pubsub credentials to ues when requesting an access token. <p> Credentials can be generated by calling {@code
-     * PubsubHelper.getComputeEngineCredential} or {@code PubsubHelper.getServiceAccountCredential}
+     * Set Google Cloud API credentials to use.
      *
      * @param credential the credentials used to authenticate.
-     * @return this config builder.
      */
     public Builder credential(final Credential credential) {
       this.credential = credential;
@@ -397,11 +500,10 @@ public class Pubsub implements Closeable {
     }
 
     /**
-     * The Pubsub service URI. By default, this is the Google Pubsub provider, however you may run a local Developer
-     * Server.
+     * The Google Cloud Pub/Sub API URI. By default, this is the Google Cloud Pub/Sub provider, however you may run a
+     * local Developer Server.
      *
      * @param uri the service to connect to.
-     * @return this config builder.
      */
     public Builder uri(final URI uri) {
       this.uri = uri;

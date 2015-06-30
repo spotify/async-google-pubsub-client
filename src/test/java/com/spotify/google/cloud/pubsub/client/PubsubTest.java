@@ -136,10 +136,8 @@ public class PubsubTest {
   @Test
   public void testPublish() throws IOException, ExecutionException, InterruptedException {
     final String data = BaseEncoding.base64().encode("hello world".getBytes("UTF-8"));
-    final PublishRequest req = new PublishRequestBuilder()
-        .messages(new MessageBuilder().data(data).build())
-        .build();
-    final PublishResponse response = pubsub.publish(PROJECT, "dano-test", req).get();
+    final Message message = new MessageBuilder().data(data).build();
+    final List<String> response = pubsub.publish(PROJECT, "dano-test", message).get();
     out.println(response);
   }
 

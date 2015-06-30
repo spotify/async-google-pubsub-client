@@ -22,7 +22,7 @@ import java.util.List;
 import io.norberg.automatter.AutoMatter;
 
 @AutoMatter
-public interface PublishRequest {
+interface PublishRequest {
 
   List<Message> messages();
 

@@ -21,7 +21,7 @@ import java.util.List;
 import io.norberg.automatter.AutoMatter;
 
 @AutoMatter
-public interface PublishResponse {
+interface PublishResponse {
 
   List<String> messageIds();
 
