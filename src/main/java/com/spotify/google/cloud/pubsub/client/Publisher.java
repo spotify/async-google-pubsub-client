@@ -37,6 +37,8 @@ public class Publisher implements Closeable {
 
   private final AtomicInteger outstanding = new AtomicInteger();
 
+  private final ConcurrentLinkedQueue<TopicQueue> pendingTopics = new ConcurrentLinkedQueue<>();
+
   private final ConcurrentMap<String, TopicQueue> topics = new ConcurrentHashMap<>();
 
   private Publisher(final Builder builder) {
@@ -62,6 +64,8 @@ public class Publisher implements Closeable {
     private final ConcurrentLinkedQueue<QueuedMessage> queue = new ConcurrentLinkedQueue<>();
     private final String topic;
 
+    private volatile boolean pending;
+
     public TopicQueue(final String topic) {
       this.topic = topic;
     }
@@ -81,15 +85,23 @@ public class Publisher implements Closeable {
 
       queue.add(new QueuedMessage(message, future));
 
-      send();
+      if (!pending) {
+        send();
+      }
 
       return future;
     }
 
     public void send() {
+      // Too many outstanding already? Add to pending queue
       if (outstanding.get() >= concurrency) {
+        pending = true;
+        pendingTopics.offer(this);
         return;
       }
+
+      // Good to go. Clear the pending flag and increment the outstanding request counter.
+      pending = false;
       outstanding.incrementAndGet();
 
       final PublishRequestBuilder builder = PublishRequest.builder();
@@ -136,7 +148,17 @@ public class Publisher implements Closeable {
               final CompletableFuture<String> future = futures.get(i);
               future.complete(messageId);
             }
-          });
+          })
+
+          // When batch is complete, process pending topics.
+          .whenComplete((v, t) -> sendPending());
+    }
+  }
+
+  private void sendPending() {
+    final TopicQueue queue = pendingTopics.poll();
+    if (queue != null) {
+      queue.send();
     }
   }
 
