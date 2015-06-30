@@ -58,8 +58,6 @@ final Iterable<MessageAndTopic> messageStream = incomingMessages();
 messageStream.forEach(m -> publisher.publish(m.topic, m.message));
 ```
 
-
-
 ### `pom.xml`
 
 ```xml
@@ -73,5 +71,4 @@ messageStream.forEach(m -> publisher.publish(m.topic, m.message));
 
 Todo
 ----
-
 * Implement a consumer
