@@ -16,14 +16,16 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
+import java.io.UnsupportedEncodingException;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
+import static com.google.common.io.BaseEncoding.base64;
 import static java.util.Arrays.asList;
 
 public class PubsubExample {
 
-  public static void main(String[] args) throws ExecutionException, InterruptedException {
+  public static void main(String[] args) throws ExecutionException, InterruptedException, UnsupportedEncodingException {
     final Pubsub pubsub = Pubsub.create();
 
     // Create a topic
@@ -33,11 +35,11 @@ public class PubsubExample {
     final List<Message> messages = asList(
         Message.builder()
             .putAttribute("type", "foo")
-            .data("hello foo")
+            .data(base64().encode("hello foo".getBytes("UTF-8")))
             .build(),
         Message.builder()
             .putAttribute("type", "bar")
-            .data("hello bar")
+            .data(base64().encode("hello foo".getBytes("UTF-8")))
             .build());
 
     // Publish the messages

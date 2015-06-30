@@ -25,11 +25,11 @@ pubsub.createTopic("my-google-cloud-project", "the-topic").get();
 final List<Message> messages = asList(
     Message.builder()
         .putAttribute("type", "foo")
-        .data("hello foo")
+        .data(base64().encode("hello foo".getBytes("UTF-8")))
         .build(),
     Message.builder()
         .putAttribute("type", "bar")
-        .data("hello bar")
+        .data(base64().encode("hello foo".getBytes("UTF-8")))
         .build());
 
 // Publish the messages
