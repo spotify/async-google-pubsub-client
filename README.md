@@ -10,7 +10,7 @@ A low level Pub/Sub client and a concurrent per-topic batching Publisher.
 
 Why
 ---
-The official Google Cloud Pub/Sub client library was now performant enough for our purposes due to blocking I/O etc.
+The official Google Cloud Pub/Sub client library was not performant enough for our purposes due to blocking I/O etc.
 
 Usage
 -----
