@@ -102,3 +102,4 @@ $ mvn exec:java -Dexec.mainClass="com.spotify.google.cloud.pubsub.client.Publish
 Todo
 ----
 * Implement a consumer
+* Implement retries on auth failure
