@@ -49,7 +49,7 @@ public class Publisher implements Closeable {
     this.project = Objects.requireNonNull(builder.project, "project");
     this.concurrency = builder.concurrency;
     this.batchSize = builder.batchSize;
-    this.queueSize = Optional.ofNullable(builder.queueSize).orElseGet(() -> batchSize * concurrency * 10);
+    this.queueSize = Optional.ofNullable(builder.queueSize).orElseGet(() -> batchSize * 10);
   }
 
   /**
