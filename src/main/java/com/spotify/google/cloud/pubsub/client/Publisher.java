@@ -131,7 +131,11 @@ public class Publisher implements Closeable {
       if (outstanding.get() >= concurrency) {
         pending = true;
         pendingTopics.offer(this);
-        return;
+
+        // Check if we lost a race while enqueing this topic and should proceed with sending immediately
+        if (outstanding.get() >= concurrency) {
+          return;
+        }
       }
 
       // Good to go. Clear the pending flag and increment the outstanding request counter.
@@ -159,6 +163,8 @@ public class Publisher implements Closeable {
       // Send the batch
       pubsub.publish(project, topic, batch).whenComplete(
           (List<String> messageIds, Throwable ex) -> {
+
+            // Decrement the outstanding request counter
             outstanding.decrementAndGet();
 
             // Fail all futures if the batch request failed
