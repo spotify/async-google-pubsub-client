@@ -143,6 +143,12 @@ public class PubsubTest {
 
   @Test
   @Ignore
+  public void listAllTopics() throws ExecutionException, InterruptedException {
+    topics().forEach(System.out::println);
+  }
+
+  @Test
+  @Ignore
   public void cleanUpTestTopics() throws ExecutionException, InterruptedException {
     final ExecutorService executor = Executors.newFixedThreadPool(CONCURRENCY / 2);
     Optional<String> pageToken = Optional.empty();
