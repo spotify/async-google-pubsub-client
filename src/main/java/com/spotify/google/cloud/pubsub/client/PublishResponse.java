@@ -20,6 +20,8 @@ import java.util.List;
 
 import io.norberg.automatter.AutoMatter;
 
+import static java.util.Arrays.asList;
+
 @AutoMatter
 interface PublishResponse {
 
@@ -31,5 +33,9 @@ interface PublishResponse {
 
   static PublishResponse of(List<String> messageIds) {
     return builder().messageIds(messageIds).build();
+  }
+
+  static PublishResponse of(String... messageIds) {
+    return of(asList(messageIds));
   }
 }

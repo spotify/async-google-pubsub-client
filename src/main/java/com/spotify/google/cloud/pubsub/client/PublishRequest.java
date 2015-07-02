@@ -21,6 +21,8 @@ import java.util.List;
 
 import io.norberg.automatter.AutoMatter;
 
+import static java.util.Arrays.asList;
+
 @AutoMatter
 interface PublishRequest {
 
@@ -32,5 +34,9 @@ interface PublishRequest {
 
   static PublishRequest of(List<Message> messages) {
     return builder().messages(messages).build();
+  }
+
+  static PublishRequest of(Message... messages) {
+    return of(asList(messages));
   }
 }
