@@ -64,6 +64,22 @@ public class PublisherTest {
   }
 
   @Test
+  public void testConfigurationGetters() {
+    final Publisher publisher = Publisher.builder()
+        .pubsub(pubsub)
+        .project("test")
+        .concurrency(11)
+        .batchSize(12)
+        .queueSize(13)
+        .build();
+
+    assertThat(publisher.project(), is("test"));
+    assertThat(publisher.concurrency(), is(11));
+    assertThat(publisher.batchSize(), is(12));
+    assertThat(publisher.queueSize(), is(13));
+  }
+
+  @Test
   public void testOutstandingRequests() throws InterruptedException, ExecutionException {
     final LinkedBlockingQueue<CompletableFuture<List<String>>> t1 = new LinkedBlockingQueue<>();
     final LinkedBlockingQueue<CompletableFuture<List<String>>> t2 = new LinkedBlockingQueue<>();

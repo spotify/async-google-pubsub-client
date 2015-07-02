@@ -99,7 +99,7 @@ public class Publisher implements Closeable {
   /**
    * Get the concurrent Google Pub/Sub request limit.
    */
-  public int concurrencyLimit() {
+  public int concurrency() {
     return concurrency;
   }
 
