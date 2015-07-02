@@ -64,7 +64,7 @@ messageStream.forEach(m -> publisher.publish(m.topic, m.message));
 <dependency>
   <groupId>com.spotify</groupId>
   <artifactId>async-google-pubsub-client</artifactId>
-  <version>1.0</version>
+  <version>1.1.1</version>
 </dependency>
 ```
 
