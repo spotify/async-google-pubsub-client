@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * A tool for publishing larger volumes of messages to Google Pubsub. Does concurrent per-topic batching in order to
+ * A tool for publishing larger volumes of messages to Google Pub/Sub. Does concurrent per-topic batching in order to
  * provide good throughput with large volumes of messages across many different topics.
  */
 public class Publisher implements Closeable {
@@ -58,7 +58,7 @@ public class Publisher implements Closeable {
    * @param topic   The topic name to publish on. Note that this is the short name, not the fully qualified name
    *                including project. The project to publish on is configured using the {@link Builder}.
    * @param message The message to publish.
-   * @return A future that is fulfilled with the resulting Google Pubsub message ID when the message has been
+   * @return A future that is fulfilled with the resulting Google Pub/Sub message ID when the message has been
    * successfully published.
    */
   public CompletableFuture<String> publish(final String topic, final Message message) {
@@ -80,6 +80,34 @@ public class Publisher implements Closeable {
    */
   public CompletableFuture<Void> closeFuture() {
     return closeFuture.thenApply(ignore -> null);
+  }
+
+  /**
+   * Get the Google Cloud project this {@link Publisher} is publishing to.
+   */
+  public String project() {
+    return project;
+  }
+
+  /**
+   * Get the concurrent Google Pub/Sub request limit.
+   */
+  public int concurrencyLimit() {
+    return concurrency;
+  }
+
+  /**
+   * Get the per-topic queue size.
+   */
+  public int queueSize() {
+    return queueSize;
+  }
+
+  /**
+   * Get the max Google Pub/Sub request batch size.
+   */
+  public int batchSize() {
+    return batchSize;
   }
 
   /**
