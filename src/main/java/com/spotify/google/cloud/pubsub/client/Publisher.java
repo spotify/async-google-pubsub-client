@@ -138,9 +138,8 @@ public class Publisher implements Closeable {
         }
       }
 
-      // Good to go. Clear the pending flag and increment the outstanding request counter.
+      // Good to go. Clear the pending flag.
       pending = false;
-      outstanding.incrementAndGet();
 
       final List<Message> batch = new ArrayList<>();
       final List<CompletableFuture<String>> futures = new ArrayList<>();
@@ -160,7 +159,8 @@ public class Publisher implements Closeable {
       // Decrement the queue size counter
       size.updateAndGet(i -> i - batch.size());
 
-      // Send the batch
+      // Send the batch request and increment the outstanding request counter
+      outstanding.incrementAndGet();
       pubsub.publish(project, topic, batch).whenComplete(
           (List<String> messageIds, Throwable ex) -> {
 
