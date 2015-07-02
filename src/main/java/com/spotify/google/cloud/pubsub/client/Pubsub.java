@@ -43,12 +43,12 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 import static com.google.common.util.concurrent.MoreExecutors.getExitingScheduledExecutorService;
 import static com.spotify.google.cloud.pubsub.client.Topic.canonicalTopic;
 import static com.spotify.google.cloud.pubsub.client.Topic.validateCanonicalTopic;
 import static java.util.Arrays.asList;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  * An async low-level Google Cloud Pub/Sub client.
@@ -76,9 +76,12 @@ public class Pubsub implements Closeable {
   private Pubsub(final Builder builder) {
     this.client = new AsyncHttpClient(new AsyncHttpClientConfig.Builder()
                                           .setConnectTimeout(builder.connectTimeout)
+                                          .setReadTimeout(builder.readTimeout)
+                                          .setRequestTimeout(builder.requestTimeout)
                                           .setMaxConnections(builder.maxConnections)
                                           .setMaxConnectionsPerHost(builder.maxConnections)
                                           .setCompressionEnforced(true)
+                                          .setRequestTimeout(builder.requestTimeout)
                                           .build());
 
     if (builder.credential == null) {
@@ -96,7 +99,7 @@ public class Pubsub implements Closeable {
     }
 
     // Wake up every 10 seconds to check if access token has expired
-    executor.scheduleAtFixedRate(this::refreshAccessToken, 10, 10, TimeUnit.SECONDS);
+    executor.scheduleAtFixedRate(this::refreshAccessToken, 10, 10, SECONDS);
   }
 
   private static Credential defaultCredential() {
@@ -447,13 +450,17 @@ public class Pubsub implements Closeable {
    */
   public static class Builder {
 
-    private static final int DEFAULT_CONNECT_TIMEOUT = 5000;
+    private static final int DEFAULT_CONNECT_TIMEOUT = (int) SECONDS.toMillis(5);
+    private static final int DEFAULT_READ_TIMEOUT = (int) SECONDS.toMillis(30);
+    private static final int DEFAULT_REQUEST_TIMEOUT = (int) SECONDS.toMillis(30);
     private static final int DEFAULT_MAX_CONNECTIONS = 5;
 
     private static final URI DEFAULT_URI = URI.create("https://pubsub.googleapis.com/v1/");
 
-    private Integer connectTimeout = DEFAULT_CONNECT_TIMEOUT;
-    private Integer maxConnections = DEFAULT_MAX_CONNECTIONS;
+    private int connectTimeout = DEFAULT_CONNECT_TIMEOUT;
+    private int readTimeout = DEFAULT_READ_TIMEOUT;
+    private int maxConnections = DEFAULT_MAX_CONNECTIONS;
+    private int requestTimeout = DEFAULT_REQUEST_TIMEOUT;
     private Credential credential;
     private URI uri = DEFAULT_URI;
 
@@ -470,11 +477,33 @@ public class Pubsub implements Closeable {
     /**
      * Set the maximum time in milliseconds the client will can wait when connecting to a remote host.
      *
-     * @param connectTimeout the maximum time in milliseconds.
+     * @param connectTimeout the connect timeout in milliseconds.
      * @return this config builder.
      */
     public Builder connectTimeout(final int connectTimeout) {
       this.connectTimeout = connectTimeout;
+      return this;
+    }
+
+    /**
+     * Set the connection read timeout in milliseconds.
+     *
+     * @param readTimeout the read timeout in milliseconds.
+     * @return this config builder.
+     */
+    public Builder readTimeout(final int readTimeout) {
+      this.readTimeout = readTimeout;
+      return this;
+    }
+
+    /**
+     * Set the request timeout in milliseconds.
+     *
+     * @param requestTimeout the maximum time in milliseconds.
+     * @return this config builder.
+     */
+    public Builder requestTimeout(final int requestTimeout) {
+      this.requestTimeout = requestTimeout;
       return this;
     }
 
