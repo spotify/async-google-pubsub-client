@@ -83,6 +83,13 @@ public class Publisher implements Closeable {
   }
 
   /**
+   * Get the current number of outstanding (batch) requests to Google Pub/Sub.
+   */
+  public int outstandingRequests() {
+    return outstanding.get();
+  }
+
+  /**
    * Get the Google Cloud project this {@link Publisher} is publishing to.
    */
   public String project() {

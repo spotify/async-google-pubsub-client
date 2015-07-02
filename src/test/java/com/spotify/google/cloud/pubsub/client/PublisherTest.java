@@ -16,68 +16,83 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
-import com.google.common.io.BaseEncoding;
-import com.google.common.util.concurrent.Futures;
-
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
 
-import java.io.UnsupportedEncodingException;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.LinkedBlockingQueue;
 
-import static java.lang.System.out;
-import static java.util.stream.Collectors.toList;
-import static java.util.stream.IntStream.range;
+import static java.util.Collections.singletonList;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertThat;
+import static org.mockito.Matchers.anyListOf;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.class)
 public class PublisherTest {
 
-  private final String PROJECT = Util.defaultProject();
+  @Mock Pubsub pubsub;
 
-  private final String TOPIC = "test-topic-" + ThreadLocalRandom.current().nextLong();
+  final ConcurrentMap<String, BlockingQueue<CompletableFuture<List<String>>>> topics = new ConcurrentHashMap<>();
 
-  private Pubsub pubsub;
   private Publisher publisher;
 
   @Before
-  public void setUp() throws ExecutionException, InterruptedException {
-    pubsub = Pubsub.builder()
-        .maxConnections(20)
-        .build();
+  public void setUp() {
     publisher = Publisher.builder()
-        .concurrency(20)
+        .project("test")
         .pubsub(pubsub)
-        .project(PROJECT)
         .build();
-    pubsub.createTopic(PROJECT, TOPIC).get();
-  }
 
-  @After
-  public void tearDown() throws ExecutionException, InterruptedException {
-    if (publisher != null) {
-      publisher.close();
-    }
-    if (pubsub != null) {
-      pubsub.deleteTopic(PROJECT, TOPIC).exceptionally(t -> null).get();
-      pubsub.close();
-    }
+    when(pubsub.publish(anyString(), anyString(), anyListOf(Message.class)))
+        .thenAnswer(invocation -> {
+          final String topic = (String) invocation.getArguments()[1];
+          final CompletableFuture<List<String>> future = new CompletableFuture<>();
+          final BlockingQueue<CompletableFuture<List<String>>> queue = topics.get(topic);
+          queue.add(future);
+          return future;
+        });
   }
 
   @Test
-  public void testPublish()
-      throws UnsupportedEncodingException, ExecutionException, InterruptedException {
-    final String data = BaseEncoding.base64().encode("hello world".getBytes("UTF-8"));
-    final Message message = Message.builder().data(data).build();
+  public void testOutstandingRequests() throws InterruptedException, ExecutionException {
+    final LinkedBlockingQueue<CompletableFuture<List<String>>> t1 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<CompletableFuture<List<String>>> t2 = new LinkedBlockingQueue<>();
+    topics.put("t1", t1);
+    topics.put("t2", t2);
 
-    final List<CompletableFuture<String>> futures = range(0, 10)
-        .mapToObj(i -> publisher.publish(TOPIC, message))
-        .collect(toList());
+    final Message m1 = Message.builder().data("1").build();
+    final Message m2 = Message.builder().data("2").build();
 
-    futures.stream()
-        .map(Futures::getUnchecked)
-        .forEach(id -> out.println("message id: " + id));
+    // Verify that the outstanding requests before publishing anything is 0
+    assertThat(publisher.outstandingRequests(), is(0));
+
+    // Publish a message and verify that the outstanding request counter rises to 1
+    final CompletableFuture<String> f1 = publisher.publish("t1", m1);
+    assertThat(publisher.outstandingRequests(), is(1));
+
+    // Publish another message and verify that the outstanding request counter rises to 2
+    final CompletableFuture<String> f2 = publisher.publish("t2", m2);
+    assertThat(publisher.outstandingRequests(), is(2));
+
+    // Respond to the first request and verify that the outstanding request counter falls to 1
+    t1.take().complete(singletonList("id1"));
+    f1.get();
+    assertThat(publisher.outstandingRequests(), is(1));
+
+    // Respond to the second request and verify that the outstanding request counter falls to 0
+    t2.take().complete(singletonList("id2"));
+    f2.get();
+    assertThat(publisher.outstandingRequests(), is(0));
   }
+
 }
