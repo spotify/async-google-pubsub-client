@@ -39,6 +39,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
@@ -74,15 +75,27 @@ public class Pubsub implements Closeable {
   private volatile String accessToken;
 
   private Pubsub(final Builder builder) {
-    this.client = new AsyncHttpClient(new AsyncHttpClientConfig.Builder()
-                                          .setConnectTimeout(builder.connectTimeout)
-                                          .setReadTimeout(builder.readTimeout)
-                                          .setRequestTimeout(builder.requestTimeout)
-                                          .setMaxConnections(builder.maxConnections)
-                                          .setMaxConnectionsPerHost(builder.maxConnections)
-                                          .setCompressionEnforced(true)
-                                          .setRequestTimeout(builder.requestTimeout)
-                                          .build());
+    final AsyncHttpClientConfig config = builder.clientConfig.build();
+
+    log.debug("creating new pubsub client with config:");
+    log.debug("uri: {}", builder.uri);
+    log.debug("connect timeout: {}", config.getConnectTimeout());
+    log.debug("read timeout: {}", config.getReadTimeout());
+    log.debug("request timeout: {}", config.getRequestTimeout());
+    log.debug("max connections: {}", config.getMaxConnections());
+    log.debug("max connections per host: {}", config.getMaxConnectionsPerHost());
+    log.debug("enabled cipher suites: {}", Arrays.toString(config.getEnabledCipherSuites()));
+    log.debug("compression enforced: {}", config.isCompressionEnforced());
+    log.debug("accept any certificate: {}", config.isAcceptAnyCertificate());
+    log.debug("follows redirect: {}", config.isFollowRedirect());
+    log.debug("pooled connection TTL: {}", config.getConnectionTTL());
+    log.debug("pooled connection idle timeout: {}", config.getPooledConnectionIdleTimeout());
+    log.debug("pooling connections: {}", config.isAllowPoolingConnections());
+    log.debug("pooling SSL connections: {}", config.isAllowPoolingSslConnections());
+    log.debug("user agent: {}", config.getUserAgent());
+    log.debug("max request retry: {}", config.getMaxRequestRetry());
+
+    this.client = new AsyncHttpClient(config);
 
     if (builder.credential == null) {
       this.credential = defaultCredential();
@@ -450,17 +463,10 @@ public class Pubsub implements Closeable {
    */
   public static class Builder {
 
-    private static final int DEFAULT_CONNECT_TIMEOUT = (int) SECONDS.toMillis(5);
-    private static final int DEFAULT_READ_TIMEOUT = (int) SECONDS.toMillis(30);
-    private static final int DEFAULT_REQUEST_TIMEOUT = (int) SECONDS.toMillis(30);
-    private static final int DEFAULT_MAX_CONNECTIONS = 5;
-
     private static final URI DEFAULT_URI = URI.create("https://pubsub.googleapis.com/v1/");
 
-    private int connectTimeout = DEFAULT_CONNECT_TIMEOUT;
-    private int readTimeout = DEFAULT_READ_TIMEOUT;
-    private int maxConnections = DEFAULT_MAX_CONNECTIONS;
-    private int requestTimeout = DEFAULT_REQUEST_TIMEOUT;
+    private final AsyncHttpClientConfig.Builder clientConfig = new AsyncHttpClientConfig.Builder();
+
     private Credential credential;
     private URI uri = DEFAULT_URI;
 
@@ -481,7 +487,7 @@ public class Pubsub implements Closeable {
      * @return this config builder.
      */
     public Builder connectTimeout(final int connectTimeout) {
-      this.connectTimeout = connectTimeout;
+      clientConfig.setConnectTimeout(connectTimeout);
       return this;
     }
 
@@ -492,7 +498,7 @@ public class Pubsub implements Closeable {
      * @return this config builder.
      */
     public Builder readTimeout(final int readTimeout) {
-      this.readTimeout = readTimeout;
+      clientConfig.setReadTimeout(readTimeout);
       return this;
     }
 
@@ -503,7 +509,7 @@ public class Pubsub implements Closeable {
      * @return this config builder.
      */
     public Builder requestTimeout(final int requestTimeout) {
-      this.requestTimeout = requestTimeout;
+      clientConfig.setRequestTimeout(requestTimeout);
       return this;
     }
 
@@ -514,7 +520,40 @@ public class Pubsub implements Closeable {
      * @return this config builder.
      */
     public Builder maxConnections(final int maxConnections) {
-      this.maxConnections = maxConnections;
+      clientConfig.setMaxConnections(maxConnections);
+      return this;
+    }
+
+    /**
+     * Set the maximum number of milliseconds a pooled connection will be reused. -1 for no limit.
+     *
+     * @param pooledConnectionTTL the maximum time in milliseconds.
+     * @return this config builder.
+     */
+    public Builder pooledConnectionTTL(final int pooledConnectionTTL) {
+      clientConfig.setConnectionTTL(pooledConnectionTTL);
+      return this;
+    }
+
+    /**
+     * Set the maximum number of milliseconds an idle pooled connection will be be kept.
+     *
+     * @param pooledConnectionIdleTimeout the timeout in milliseconds.
+     * @return this config builder.
+     */
+    public Builder pooledConnectionIdleTimeout(final int pooledConnectionIdleTimeout) {
+      clientConfig.setPooledConnectionIdleTimeout(pooledConnectionIdleTimeout);
+      return this;
+    }
+
+    /**
+     * Set whether to allow connection pooling or not. Default is true.
+     *
+     * @param allowPoolingConnections the maximum number of connections.
+     * @return this config builder.
+     */
+    public Builder allowPoolingConnections(final boolean allowPoolingConnections) {
+      clientConfig.setAllowPoolingConnections(allowPoolingConnections);
       return this;
     }
 
@@ -525,6 +564,26 @@ public class Pubsub implements Closeable {
      */
     public Builder credential(final Credential credential) {
       this.credential = credential;
+      return this;
+    }
+
+    /**
+     * Set cipher suites to enable for SSL/TLS.
+     *
+     * @param enabledCipherSuites The cipher suites to enable.
+     */
+    public Builder enabledCipherSuites(final String... enabledCipherSuites) {
+      clientConfig.setEnabledCipherSuites(enabledCipherSuites);
+      return this;
+    }
+
+    /**
+     * Set cipher suites to enable for SSL/TLS.
+     *
+     * @param enabledCipherSuites The cipher suites to enable.
+     */
+    public Builder enabledCipherSuites(final List<String> enabledCipherSuites) {
+      clientConfig.setEnabledCipherSuites(enabledCipherSuites.toArray(new String[enabledCipherSuites.size()]));
       return this;
     }
 

@@ -35,6 +35,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import javax.net.ssl.SSLContext;
 
 import static com.spotify.google.cloud.pubsub.client.Util.TEST_TOPIC_PREFIX;
 import static java.lang.System.out;
@@ -46,13 +50,16 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertThat;
 
-public class PubsubTest {
+/**
+ * Tests talking to the real Google Cloud Pub/Sub service.
+ */
+public class PubsubIntegrationTest {
 
   private static final int CONCURRENCY = 128;
 
-  private final String PROJECT = Util.defaultProject();
+  private static final String PROJECT = Util.defaultProject();
 
-  private final String TOPIC = TEST_TOPIC_PREFIX + ThreadLocalRandom.current().nextLong();
+  private static final String TOPIC = TEST_TOPIC_PREFIX + ThreadLocalRandom.current().nextLong();
 
   private static GoogleCredential CREDENTIAL;
 
@@ -81,8 +88,12 @@ public class PubsubTest {
   }
 
   @Test
-  public void testCreateGetListDeleteTopics()
-      throws IOException, ExecutionException, InterruptedException {
+  public void testCreateGetListDeleteTopics() throws Exception {
+    testCreateGetListDeleteTopics(pubsub);
+  }
+
+
+  private static void testCreateGetListDeleteTopics(final Pubsub pubsub) throws Exception {
 
     // Create topic
     final Topic expected = Topic.of(PROJECT, TOPIC);
@@ -99,7 +110,7 @@ public class PubsubTest {
 
     // Verify that the topic is listed
     {
-      final List<Topic> topics = topics();
+      final List<Topic> topics = topics(pubsub);
       assertThat(topics, hasItem(expected));
     }
 
@@ -114,12 +125,12 @@ public class PubsubTest {
       assertThat(topic, is(nullValue()));
     }
     {
-      final List<Topic> topics = topics();
+      final List<Topic> topics = topics(pubsub);
       assertThat(topics, not(contains(expected)));
     }
   }
 
-  private List<Topic> topics() throws ExecutionException, InterruptedException {
+  private static List<Topic> topics(final Pubsub pubsub) throws ExecutionException, InterruptedException {
     final List<Topic> topics = new ArrayList<>();
     Optional<String> pageToken = Optional.empty();
     while (true) {
@@ -142,9 +153,27 @@ public class PubsubTest {
   }
 
   @Test
+  public void testEnabledCipherSuites() throws Exception {
+    pubsub.close();
+
+    final String[] defaultCiphers = SSLContext.getDefault().getDefaultSSLParameters().getCipherSuites();
+    final List<String> nonGcmCiphers = Stream.of(defaultCiphers)
+        .filter(cipher -> cipher.contains("GCM"))
+        .collect(Collectors.toList());
+
+    pubsub = Pubsub.builder()
+        .maxConnections(CONCURRENCY)
+        .credential(CREDENTIAL)
+        .enabledCipherSuites(nonGcmCiphers)
+        .build();
+
+    testCreateGetListDeleteTopics(pubsub);
+  }
+
+  @Test
   @Ignore
   public void listAllTopics() throws ExecutionException, InterruptedException {
-    topics().forEach(System.out::println);
+    topics(pubsub).forEach(System.out::println);
   }
 
   @Test
