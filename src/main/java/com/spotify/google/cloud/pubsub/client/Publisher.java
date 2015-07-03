@@ -27,17 +27,71 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static java.util.Collections.unmodifiableList;
+
 /**
  * A tool for publishing larger volumes of messages to Google Pub/Sub. Does concurrent per-topic batching in order to
  * provide good throughput with large volumes of messages across many different topics.
  */
 public class Publisher implements Closeable {
 
+  /**
+   * A listener for monitoring operations performed by the {@link Publisher}.
+   */
+  public interface Listener {
+
+    /**
+     * Called when a new {@link Publisher} is instantiated.
+     *
+     * @param publisher The {@link Publisher}
+     */
+    void publisherCreated(Publisher publisher);
+
+    /**
+     * Called when a {@link Publisher} is closed.
+     *
+     * @param publisher The {@link Publisher}
+     */
+    void publisherClosed(Publisher publisher);
+
+    /**
+     * Called when a {@link Publisher} receieves a new message for publication.
+     *
+     * @param publisher The {@link Publisher}
+     * @param topic     The message topic.
+     * @param message   The message.
+     * @param future    The future result.
+     */
+    void publishingMessage(Publisher publisher, String topic, Message message, CompletableFuture<String> future);
+
+    /**
+     * Called when a {@link Publisher} is sending a batch of messages to Google Cloud Pub/Sub.
+     *
+     * @param publisher The {@link Publisher}
+     * @param topic     The topic of the message batch.
+     * @param batch     The batch of messages being sent.
+     * @param future    The future result of the entire batch.
+     */
+    void sendingBatch(Publisher publisher, String topic, List<Message> batch, CompletableFuture<List<String>> future);
+
+    /**
+     * Called when a topic is enqueued as pending for future batch sending due to the publisher hitting the concurrency
+     * limit.
+     *
+     * @param publisher   The {@link Publisher}
+     * @param topic       The topic.
+     * @param outstanding The current number of outstanding batch requests to Google Cloud Pub/Sub.
+     * @param concurrency The configured concurrency limit.
+     */
+    void topicPending(Publisher publisher, String topic, int outstanding, int concurrency);
+  }
+
   private final Pubsub pubsub;
   private final String project;
   private final int queueSize;
   private final int batchSize;
   private final int concurrency;
+  private final Listener listener;
 
   private final AtomicInteger outstanding = new AtomicInteger();
   private final ConcurrentLinkedQueue<TopicQueue> pendingTopics = new ConcurrentLinkedQueue<>();
@@ -50,6 +104,8 @@ public class Publisher implements Closeable {
     this.concurrency = builder.concurrency;
     this.batchSize = builder.batchSize;
     this.queueSize = Optional.ofNullable(builder.queueSize).orElseGet(() -> batchSize * 10);
+    this.listener = builder.listener == null ? new ListenerAdapter() : builder.listener;
+    listener.publisherCreated(this);
   }
 
   /**
@@ -63,7 +119,9 @@ public class Publisher implements Closeable {
    */
   public CompletableFuture<String> publish(final String topic, final Message message) {
     final TopicQueue queue = topics.computeIfAbsent(topic, TopicQueue::new);
-    return queue.send(message);
+    final CompletableFuture<String> future = queue.send(message);
+    listener.publishingMessage(this, topic, message, future);
+    return future;
   }
 
   /**
@@ -73,6 +131,7 @@ public class Publisher implements Closeable {
   public void close() {
     pubsub.close();
     closeFuture.complete(null);
+    listener.publisherClosed(Publisher.this);
   }
 
   /**
@@ -163,9 +222,13 @@ public class Publisher implements Closeable {
      */
     private void send() {
       // Too many outstanding already? Add to pending queue
-      if (outstanding.get() >= concurrency) {
+      final int currentOutstanding = outstanding.get();
+      if (currentOutstanding >= concurrency) {
         pending = true;
         pendingTopics.offer(this);
+
+        // Tell the listener that a batch is pending
+        listener.topicPending(Publisher.this, topic, currentOutstanding, concurrency);
 
         // Check if we lost a race while enqueing this topic and should proceed with sending immediately
         if (outstanding.get() >= concurrency) {
@@ -196,7 +259,9 @@ public class Publisher implements Closeable {
 
       // Send the batch request and increment the outstanding request counter
       outstanding.incrementAndGet();
-      pubsub.publish(project, topic, batch).whenComplete(
+      final CompletableFuture<List<String>> batchFuture = pubsub.publish(project, topic, batch);
+      listener.sendingBatch(Publisher.this, topic, unmodifiableList(batch), batchFuture);
+      batchFuture.whenComplete(
           (List<String> messageIds, Throwable ex) -> {
 
             // Decrement the outstanding request counter
@@ -268,9 +333,9 @@ public class Publisher implements Closeable {
     private Pubsub pubsub;
     private String project;
     private Integer queueSize;
-
     private int batchSize = 1000;
     private int concurrency = 64;
+    private Listener listener;
 
     /**
      * Set the {@link Pubsub} client to use. The client will be closed when this {@link Publisher} is closed.
@@ -316,10 +381,49 @@ public class Publisher implements Closeable {
     }
 
     /**
+     * Set the Google Cloud Pub/Sub request concurrency level. Default is {@code 64}.
+     */
+    public Builder listener(final Listener listener) {
+      this.listener = listener;
+      return this;
+    }
+
+    /**
      * Build a {@link Publisher}.
      */
     public Publisher build() {
       return new Publisher(this);
+    }
+  }
+
+  public static class ListenerAdapter implements Listener {
+
+    @Override
+    public void publisherCreated(final Publisher publisher) {
+
+    }
+
+    @Override
+    public void publisherClosed(final Publisher publisher) {
+
+    }
+
+    @Override
+    public void publishingMessage(final Publisher publisher, final String topic, final Message message,
+                                  final CompletableFuture<String> future) {
+
+    }
+
+    @Override
+    public void sendingBatch(final Publisher publisher, final String topic, final List<Message> batch,
+                             final CompletableFuture<List<String>> future) {
+
+    }
+
+    @Override
+    public void topicPending(final Publisher publisher, final String topic, final int outstanding,
+                             final int concurrency) {
+
     }
   }
 }
