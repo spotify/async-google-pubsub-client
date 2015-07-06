@@ -120,6 +120,41 @@ public class PublisherTest {
   }
 
   @Test
+  public void testPendingTopics() throws InterruptedException, ExecutionException {
+    final LinkedBlockingQueue<CompletableFuture<List<String>>> t1 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<CompletableFuture<List<String>>> t2 = new LinkedBlockingQueue<>();
+    topics.put("t1", t1);
+    topics.put("t2", t2);
+
+    publisher = Publisher.builder()
+        .project("test")
+        .pubsub(pubsub)
+        .listener(listener)
+        .concurrency(1)
+        .build();
+
+    final Message m1 = Message.builder().data("1").build();
+    final Message m2 = Message.builder().data("2").build();
+
+    // Verify that the pending topics before publishing anything is 0
+    assertThat(publisher.pendingTopics(), is(0));
+
+    // Publish a message and verify that the pending topics is still 0
+    final CompletableFuture<String> f1 = publisher.publish("t1", m1);
+    verify(pubsub, timeout(1000)).publish("test", "t1", singletonList(m1));
+    assertThat(publisher.pendingTopics(), is(0));
+
+    // Publish a message on a different topic and verify that the pending topics counter rises to 1
+    publisher.publish("t2", m2);
+    assertThat(publisher.pendingTopics(), is(1));
+
+    // Respond to the first request and verify that the pending topics falls to 0
+    t1.take().complete(singletonList("id1"));
+    f1.get();
+    assertThat(publisher.pendingTopics(), is(0));
+  }
+
+  @Test
   public void testListener() throws InterruptedException, ExecutionException {
     setUpPubsubClient();
 

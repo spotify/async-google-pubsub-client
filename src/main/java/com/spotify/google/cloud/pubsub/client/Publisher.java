@@ -149,6 +149,13 @@ public class Publisher implements Closeable {
   }
 
   /**
+   * Get the current number of topics that are pending batch sending to Google Pub/Sub.
+   */
+  public int pendingTopics() {
+    return pendingTopics.size();
+  }
+
+  /**
    * Get the Google Cloud project this {@link Publisher} is publishing to.
    */
   public String project() {
