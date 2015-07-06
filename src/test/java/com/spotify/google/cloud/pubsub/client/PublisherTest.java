@@ -35,11 +35,13 @@ import java.util.concurrent.LinkedBlockingQueue;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.anyListOf;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -204,6 +206,64 @@ public class PublisherTest {
 
     assertThat(closed.isDone(), is(true));
   }
+
+  @Test
+  public void testQueueSize() throws InterruptedException, ExecutionException {
+    final LinkedBlockingQueue<CompletableFuture<List<String>>> t = new LinkedBlockingQueue<>();
+    topics.put("t", t);
+
+
+    final Message m0 = Message.builder().data("0").build();
+    final Message m1 = Message.builder().data("1").build();
+    final Message m2 = Message.builder().data("2").build();
+
+    publisher = Publisher.builder()
+        .project("test")
+        .pubsub(pubsub)
+        .listener(listener)
+        .concurrency(1)
+        .queueSize(1)
+        .build();
+
+
+    // Send one message to saturate the concurrency (queue size == 0)
+    final CompletableFuture<String> f0 = publisher.publish("t", m0);
+    verify(pubsub, timeout(1000)).publish(eq("test"), eq("t"), eq(singletonList(m0)));
+
+    // Send one message to occupy the queue (queue size == 1)
+    final CompletableFuture<String> f1 = publisher.publish("t", m1);
+
+    // Send a message that should fast fail due to the queue being full
+    final CompletableFuture<String> f2 = publisher.publish("t", m2);
+    assertThat(f2.isCompletedExceptionally(), is(true));
+    assertThat(exception(f2), is(instanceOf(QueueFullException.class)));
+
+    // Complete the first request
+    t.take().complete(singletonList("id0"));
+
+    // Verify that the second one is sent and complete it
+    verify(pubsub, timeout(1000)).publish(eq("test"), eq("t"), eq(singletonList(m1)));
+    t.take().complete(singletonList("id1"));
+
+    // Verify that the fast-failed request was not sent
+    Thread.sleep(1000);
+    verify(pubsub, never()).publish(anyString(), anyString(), eq(singletonList(m2)));
+  }
+
+  private Throwable exception(final CompletableFuture<?> f) {
+    if (!f.isCompletedExceptionally()) {
+      throw new IllegalArgumentException();
+    }
+    try {
+      f.get();
+    } catch (InterruptedException e) {
+      return e;
+    } catch (ExecutionException e) {
+      return e.getCause();
+    }
+    return null;
+  }
+
 
   private void setUpPubsubClient() {
     reset(pubsub);

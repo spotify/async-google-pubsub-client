@@ -204,6 +204,7 @@ public class Publisher implements Closeable {
         newSize = currentSize + 1;
         if (newSize > queueSize) {
           future.completeExceptionally(new QueueFullException());
+          return future;
         }
       } while (!size.compareAndSet(currentSize, newSize));
 
