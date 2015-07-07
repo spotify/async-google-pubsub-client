@@ -16,41 +16,50 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
-import com.google.api.client.repackaged.com.google.common.base.Throwables;
-import com.google.common.io.CharStreams;
+import com.google.common.base.Splitter;
 
+import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.util.List;
 
-import static com.google.api.client.repackaged.com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.base.CharMatcher.WHITESPACE;
+import static java.lang.System.getProperty;
 
 class Util {
 
-  public static final String TEST_TOPIC_PREFIX = "test-topic-";
+  static final String TEST_TOPIC_PREFIX = "test-topic-";
 
-  private static String defaultProject;
+  private static File CONFIG_PATH = new File(getProperty("user.home"), ".config");
+  private static File GCLOUD_CONFIG_PATH = new File(CONFIG_PATH, "gcloud");
+  private static File PROPERTIES_PATH = new File(GCLOUD_CONFIG_PATH, "properties");
 
-  public static String defaultProject() {
-    if (defaultProject == null) {
-      defaultProject = shell("gcloud config list | grep project | cut -d ' ' -f 3-");
-      if (isNullOrEmpty(defaultProject) || WHITESPACE.matchesAnyOf(defaultProject())) {
-        throw new RuntimeException("failed to get default project");
-      }
+  private static String defaultProject = System.getenv("GOOGLE_CLOUD_PROJECT");
+
+  static String defaultProject() {
+
+    if (defaultProject != null) {
+      return defaultProject;
     }
-    return defaultProject;
-  }
 
-  private static String shell(final String command) {
+    // Try reading $HOME/.config/gcloud/properties
+
+    final List<String> lines;
     try {
-      final Process p = new ProcessBuilder().command("/bin/sh", "-c", command).start();
-      final String result = CharStreams.toString(new InputStreamReader(p.getInputStream())).trim();
-      if (p.waitFor() != 0) {
-        throw new RuntimeException("Exit code != 0: " + command);
-      }
-      return result;
-    } catch (IOException | InterruptedException e) {
-      throw Throwables.propagate(e);
+      lines = Files.readAllLines(PROPERTIES_PATH.toPath());
+    } catch (IOException e) {
+      throw new RuntimeException("failed to get default project");
     }
+
+    defaultProject = lines.stream()
+        .filter(line -> line.contains("project")).findFirst()
+        .map(line -> Splitter.on(WHITESPACE).splitToList(line))
+        .map(tokens -> tokens.size() > 2 ? tokens.get(2) : "").orElse("");
+
+    if (defaultProject == null) {
+      throw new RuntimeException("failed to get default project");
+    }
+
+    return defaultProject;
   }
 }
