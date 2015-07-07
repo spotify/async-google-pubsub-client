@@ -173,7 +173,7 @@ public class PubsubIntegrationTest {
   @Test
   @Ignore
   public void listAllTopics() throws ExecutionException, InterruptedException {
-    topics(pubsub).forEach(System.out::println);
+    topics(pubsub).stream().map(Topic::name).forEach(System.out::println);
   }
 
   @Test
