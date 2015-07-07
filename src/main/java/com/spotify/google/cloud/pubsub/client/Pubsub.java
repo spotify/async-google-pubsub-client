@@ -20,36 +20,25 @@ import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.googleapis.util.Utils;
 import com.google.api.client.repackaged.com.google.common.base.Throwables;
-import com.google.common.net.HttpHeaders;
+import com.google.common.annotations.VisibleForTesting;
 
-import com.ning.http.client.AsyncHandler;
 import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.AsyncHttpClientConfig;
-import com.ning.http.client.HttpResponseBodyPart;
-import com.ning.http.client.HttpResponseHeaders;
-import com.ning.http.client.HttpResponseStatus;
-import com.ning.http.client.Request;
-import com.ning.http.client.RequestBuilder;
 
-import org.jboss.netty.handler.codec.http.HttpMethod;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.function.Supplier;
 
-import static com.google.common.util.concurrent.MoreExecutors.getExitingScheduledExecutorService;
 import static com.spotify.google.cloud.pubsub.client.Topic.canonicalTopic;
 import static com.spotify.google.cloud.pubsub.client.Topic.validateCanonicalTopic;
 import static java.util.Arrays.asList;
-import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  * An async low-level Google Cloud Pub/Sub client.
@@ -58,21 +47,7 @@ public class Pubsub implements Closeable {
 
   private static final Logger log = LoggerFactory.getLogger(Pubsub.class);
 
-  private static final String VERSION = "1.0.0";
-  private static final String USER_AGENT =
-      "Spotify-Google-Pubsub-Java-Client/" + VERSION + " (gzip)";
-
-  private static final Object NO_PAYLOAD = new Object();
-
-  private final AsyncHttpClient client;
-  private final String baseUri;
-  private final Credential credential;
-  private final CompletableFuture<Void> closeFuture = new CompletableFuture<>();
-
-  private final ScheduledExecutorService executor = getExitingScheduledExecutorService(
-      new ScheduledThreadPoolExecutor(1));
-
-  private volatile String accessToken;
+  private final Service service;
 
   private Pubsub(final Builder builder) {
     final AsyncHttpClientConfig config = builder.clientConfig.build();
@@ -95,51 +70,7 @@ public class Pubsub implements Closeable {
     log.debug("user agent: {}", config.getUserAgent());
     log.debug("max request retry: {}", config.getMaxRequestRetry());
 
-    this.client = new AsyncHttpClient(config);
-
-    if (builder.credential == null) {
-      this.credential = defaultCredential();
-    } else {
-      this.credential = builder.credential;
-    }
-
-    this.baseUri = stripTrailingSlash(builder.uri.toString());
-
-    // Get initial access token
-    refreshAccessToken();
-    if (accessToken == null) {
-      throw new RuntimeException("Failed to get access token");
-    }
-
-    // Wake up every 10 seconds to check if access token has expired
-    executor.scheduleAtFixedRate(this::refreshAccessToken, 10, 10, SECONDS);
-  }
-
-  private static Credential defaultCredential() {
-    try {
-      return GoogleCredential.getApplicationDefault(
-          Utils.getDefaultTransport(), Utils.getDefaultJsonFactory());
-    } catch (IOException e) {
-      throw Throwables.propagate(e);
-    }
-  }
-
-  private String stripTrailingSlash(final String path) {
-    return path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
-  }
-
-  private static int defaultPort(final URI uri) {
-    if (uri.getPort() != -1) {
-      return uri.getPort();
-    }
-    switch (uri.getScheme()) {
-      case "https":
-        return 443;
-      case "http":
-        return 80;
-      default:
-        throw new IllegalArgumentException("Illegal uri: " + uri);
-    }
+    this.service = builder.service.createService(config, builder.uri, builder.accessToken.get());
   }
 
   /**
@@ -147,36 +78,14 @@ public class Pubsub implements Closeable {
    */
   @Override
   public void close() {
-    executor.shutdown();
-    client.close();
+    service.close();
   }
 
   /**
    * Get a future that is completed when this {@link Pubsub} client is closed.
    */
   public CompletableFuture<Void> closeFuture() {
-    return closeFuture.thenApply(ignore -> null);
-  }
-
-  /**
-   * Refresh the Google Cloud API access token, if necessary.
-   */
-  private void refreshAccessToken() {
-    final Long expiresIn = credential.getExpiresInSeconds();
-
-    // trigger refresh if token is about to expire
-    String accessToken = credential.getAccessToken();
-    if (accessToken == null || expiresIn != null && expiresIn <= 60) {
-      try {
-        credential.refreshToken();
-        accessToken = credential.getAccessToken();
-      } catch (final IOException e) {
-        log.error("Failed to fetch access token", e);
-      }
-    }
-    if (accessToken != null) {
-      this.accessToken = accessToken;
-    }
+    return service.closeFuture();
   }
 
   /**
@@ -188,8 +97,8 @@ public class Pubsub implements Closeable {
    * @return A future that is completed when this request is completed.
    */
   public CompletableFuture<TopicList> listTopics(final String project) {
-    final String uri = baseUri + "/projects/" + project + "/topics";
-    return get(uri, TopicList.class);
+    final String uri = "/projects/" + project + "/topics";
+    return service.get(uri, TopicList.class);
   }
 
   /**
@@ -201,12 +110,12 @@ public class Pubsub implements Closeable {
    */
   public CompletableFuture<TopicList> listTopics(final String project,
                                                  final String pageToken) {
-    final StringBuilder uri = new StringBuilder().append(baseUri)
+    final StringBuilder uri = new StringBuilder()
         .append("/projects/").append(project).append("/topics");
     if (pageToken != null) {
       uri.append("?pageToken=").append(pageToken);
     }
-    return get(uri.toString(), TopicList.class);
+    return service.get(uri.toString(), TopicList.class);
   }
 
   /**
@@ -241,8 +150,8 @@ public class Pubsub implements Closeable {
   private CompletableFuture<Topic> createTopic(final String canonicalTopic,
                                                final Topic req) {
     validateCanonicalTopic(canonicalTopic);
-    final String uri = baseUri + "/" + canonicalTopic;
-    return put(uri, req, Topic.class);
+    final String uri = "/" + canonicalTopic;
+    return service.put(uri, req, Topic.class);
   }
 
   /**
@@ -254,8 +163,8 @@ public class Pubsub implements Closeable {
    * if the response is 404.
    */
   public CompletableFuture<Topic> getTopic(final String project, final String topic) {
-    final String uri = baseUri + "/" + canonicalTopic(project, topic);
-    return get(uri, Topic.class);
+    final String uri = "/" + canonicalTopic(project, topic);
+    return service.get(uri, Topic.class);
   }
 
   /**
@@ -267,8 +176,8 @@ public class Pubsub implements Closeable {
    */
   public CompletableFuture<Topic> getTopic(final String canonicalTopic) {
     validateCanonicalTopic(canonicalTopic);
-    final String uri = baseUri + "/" + canonicalTopic;
-    return get(uri, Topic.class);
+    final String uri = "/" + canonicalTopic;
+    return service.get(uri, Topic.class);
   }
 
   /**
@@ -293,8 +202,8 @@ public class Pubsub implements Closeable {
    */
   public CompletableFuture<Void> deleteTopic(final String canonicalTopic) {
     validateCanonicalTopic(canonicalTopic);
-    final String uri = baseUri + "/" + canonicalTopic;
-    return delete(uri, Void.class);
+    final String uri = "/" + canonicalTopic;
+    return service.delete(uri);
   }
 
   /**
@@ -320,127 +229,9 @@ public class Pubsub implements Closeable {
    */
   public CompletableFuture<List<String>> publish(final String project, final String topic,
                                                  final List<Message> messages) {
-    final String uri = baseUri + "/projects/" + project + "/topics/" + topic + ":publish";
-    return post(uri, PublishRequest.of(messages), PublishResponse.class)
+    final String uri = "/projects/" + project + "/topics/" + topic + ":publish";
+    return service.post(uri, PublishRequest.of(messages), PublishResponse.class)
         .thenApply(PublishResponse::messageIds);
-  }
-
-  /**
-   * Make a GET request.
-   */
-  private <T> CompletableFuture<T> get(final String uri, final Class<T> responseClass) {
-    return request(HttpMethod.GET, uri, responseClass);
-  }
-
-  /**
-   * Make a POST request.
-   */
-  private <T> CompletableFuture<T> post(final String uri, final Object payload,
-                                        final Class<T> responseClass) {
-    return request(HttpMethod.POST, uri, responseClass, payload);
-  }
-
-  /**
-   * Make a PUT request.
-   */
-  private <T> CompletableFuture<T> put(final String uri, final Object payload,
-                                       final Class<T> responseClass) {
-    return request(HttpMethod.PUT, uri, responseClass, payload);
-  }
-
-  /**
-   * Make a DELETE request.
-   */
-  private <T> CompletableFuture<T> delete(final String uri, final Class<T> responseClass) {
-    return request(HttpMethod.DELETE, uri, responseClass);
-  }
-
-  /**
-   * Make an HTTP request.
-   */
-  private <T> CompletableFuture<T> request(final HttpMethod method, final String uri,
-                                           final Class<T> responseClass) {
-    return request(method, uri, responseClass, NO_PAYLOAD);
-  }
-
-  /**
-   * Make an HTTP request.
-   */
-  private <T> CompletableFuture<T> request(final HttpMethod method, final String uri,
-                                           final Class<T> responseClass, final Object payload) {
-
-    final RequestBuilder builder = new RequestBuilder()
-        .setUrl(uri)
-        .setMethod(method.toString())
-        .setHeader("Authorization", "Bearer " + accessToken)
-        .setHeader("User-Agent", USER_AGENT)
-        .setHeader("Accept-Encoding", "gzip");
-
-    if (payload != NO_PAYLOAD) {
-      final byte[] json = Json.write(payload);
-      builder.setHeader(HttpHeaders.CONTENT_LENGTH, String.valueOf(json.length));
-      builder.setBody(json);
-    }
-
-    final Request request = builder.build();
-
-    final CompletableFuture<T> future = new CompletableFuture<>();
-    client.executeRequest(request, new AsyncHandler<Void>() {
-      private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-
-      @Override
-      public void onThrowable(final Throwable t) {
-        future.completeExceptionally(t);
-      }
-
-      @Override
-      public STATE onBodyPartReceived(final HttpResponseBodyPart bodyPart) throws Exception {
-        bytes.write(bodyPart.getBodyPartBytes());
-        return STATE.CONTINUE;
-      }
-
-      @Override
-      public STATE onStatusReceived(final HttpResponseStatus status) throws Exception {
-
-        // Return null for 404'd GET & DELETE requests
-        if (status.getStatusCode() == 404 && method == HttpMethod.GET || method == HttpMethod.DELETE) {
-          future.complete(null);
-          return STATE.ABORT;
-        }
-
-        // Fail on non-2xx responses
-        final int statusCode = status.getStatusCode();
-        if (!(statusCode >= 200 && statusCode < 300)) {
-          future.completeExceptionally(
-              new RequestFailedException(status.getStatusCode(), status.getStatusText()));
-          return STATE.ABORT;
-        }
-
-        if (responseClass == Void.class) {
-          future.complete(null);
-          return STATE.ABORT;
-        }
-
-        return STATE.CONTINUE;
-      }
-
-      @Override
-      public STATE onHeadersReceived(final HttpResponseHeaders headers) throws Exception {
-        return STATE.CONTINUE;
-      }
-
-      @Override
-      public Void onCompleted() throws Exception {
-        try {
-          future.complete(Json.read(bytes.toByteArray(), responseClass));
-        } catch (IOException e) {
-          future.completeExceptionally(e);
-        }
-        return null;
-      }
-    });
-
-    return future;
   }
 
   /**
@@ -467,8 +258,10 @@ public class Pubsub implements Closeable {
 
     private final AsyncHttpClientConfig.Builder clientConfig = new AsyncHttpClientConfig.Builder();
 
-    private Credential credential;
     private URI uri = DEFAULT_URI;
+    private Service.Factory service = Service::new;
+    private Supplier<Credential> credential = () -> defaultCredential();
+    private Supplier<Supplier<String>> accessToken = () -> new AccessTokenSupplier(credential.get());
 
     private Builder() {
     }
@@ -563,7 +356,7 @@ public class Pubsub implements Closeable {
      * @param credential the credentials used to authenticate.
      */
     public Builder credential(final Credential credential) {
-      this.credential = credential;
+      this.credential = () -> credential;
       return this;
     }
 
@@ -596,6 +389,38 @@ public class Pubsub implements Closeable {
     public Builder uri(final URI uri) {
       this.uri = uri;
       return this;
+    }
+
+    /**
+     * Set a factory function to use for creating the {@link AsyncHttpClient} that will be used to talk to Google
+     * Pub/Sub. Currently for testing purposes only.
+     */
+    @VisibleForTesting
+    Builder service(final Service.Factory service) {
+      this.service = service;
+      return this;
+    }
+
+    /**
+     * Set a supplier for access tokens to use for authentication when talking to Google Pub/Sub. Currently for testing
+     * purposes only.
+     */
+    @VisibleForTesting
+    Builder accessToken(final Supplier<String> accessToken) {
+      this.accessToken = () -> accessToken;
+      return this;
+    }
+
+    /**
+     * Get the application default Google credential.
+     */
+    private static Credential defaultCredential() {
+      try {
+        return GoogleCredential.getApplicationDefault(
+            Utils.getDefaultTransport(), Utils.getDefaultJsonFactory());
+      } catch (IOException e) {
+        throw Throwables.propagate(e);
+      }
     }
   }
 }

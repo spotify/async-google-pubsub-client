@@ -53,7 +53,7 @@ import static org.junit.Assert.assertThat;
 /**
  * Tests talking to the real Google Cloud Pub/Sub service.
  */
-public class PubsubIntegrationTest {
+public class PubsubIT {
 
   private static final int CONCURRENCY = 128;
 

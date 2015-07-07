@@ -36,7 +36,7 @@ import static java.util.stream.IntStream.range;
 /**
  * Tests publishing to the real Google Cloud Pub/Sub service.
  */
-public class PublisherIntegrationTest {
+public class PublisherIT {
 
   private final String PROJECT = Util.defaultProject();
 
