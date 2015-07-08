@@ -465,8 +465,12 @@ public class Pubsub implements Closeable {
 
     private static final URI DEFAULT_URI = URI.create("https://pubsub.googleapis.com/v1/");
 
+    private static final int DEFAULT_REQUEST_TIMEOUT_MS = 30000;
+
     private final AsyncHttpClientConfig.Builder clientConfig = new AsyncHttpClientConfig.Builder()
-        .setUseProxySelector(true);
+        .setUseProxySelector(true)
+        .setRequestTimeout(DEFAULT_REQUEST_TIMEOUT_MS)
+        .setReadTimeout(DEFAULT_REQUEST_TIMEOUT_MS);
 
     private Credential credential;
     private URI uri = DEFAULT_URI;
