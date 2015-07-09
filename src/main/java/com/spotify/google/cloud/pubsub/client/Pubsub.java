@@ -373,8 +373,7 @@ public class Pubsub implements Closeable {
         .setUrl(uri)
         .setMethod(method.toString())
         .setHeader("Authorization", "Bearer " + accessToken)
-        .setHeader("User-Agent", USER_AGENT)
-        .setHeader("Accept-Encoding", "gzip");
+        .setHeader("User-Agent", USER_AGENT);
 
     if (payload != NO_PAYLOAD) {
       final byte[] json = Json.write(payload);
@@ -468,6 +467,7 @@ public class Pubsub implements Closeable {
     private static final int DEFAULT_REQUEST_TIMEOUT_MS = 30000;
 
     private final AsyncHttpClientConfig.Builder clientConfig = new AsyncHttpClientConfig.Builder()
+        .setCompressionEnforced(true)
         .setUseProxySelector(true)
         .setRequestTimeout(DEFAULT_REQUEST_TIMEOUT_MS)
         .setReadTimeout(DEFAULT_REQUEST_TIMEOUT_MS);
