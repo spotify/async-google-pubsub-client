@@ -43,8 +43,10 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.zip.Deflater;
 import java.util.zip.GZIPOutputStream;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.util.concurrent.MoreExecutors.getExitingScheduledExecutorService;
 import static com.spotify.google.cloud.pubsub.client.Topic.canonicalTopic;
 import static com.spotify.google.cloud.pubsub.client.Topic.validateCanonicalTopic;
@@ -76,6 +78,7 @@ public class Pubsub implements Closeable {
       new ScheduledThreadPoolExecutor(1));
 
   private volatile String accessToken;
+  private final int compressionLevel;
 
   private Pubsub(final Builder builder) {
     final AsyncHttpClientConfig config = builder.clientConfig.build();
@@ -99,6 +102,8 @@ public class Pubsub implements Closeable {
     log.debug("max request retry: {}", config.getMaxRequestRetry());
 
     this.client = new AsyncHttpClient(config);
+
+    this.compressionLevel = builder.compressionLevel;
 
     if (builder.credential == null) {
       this.credential = defaultCredential();
@@ -453,9 +458,14 @@ public class Pubsub implements Closeable {
   }
 
   private byte[] gzipJson(final Object payload) {
+    // TODO (dano): cache and reuse deflater
     try (
         final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        final GZIPOutputStream gzip = new GZIPOutputStream(bytes);
+        final GZIPOutputStream gzip = new GZIPOutputStream(bytes) {
+          {
+            this.def.setLevel(compressionLevel);
+          }
+        }
     ) {
       Json.write(gzip, payload);
       return bytes.toByteArray();
@@ -496,6 +506,7 @@ public class Pubsub implements Closeable {
 
     private Credential credential;
     private URI uri = DEFAULT_URI;
+    private int compressionLevel = Deflater.DEFAULT_COMPRESSION;
 
     private Builder() {
     }
@@ -515,6 +526,22 @@ public class Pubsub implements Closeable {
      */
     public Builder connectTimeout(final int connectTimeout) {
       clientConfig.setConnectTimeout(connectTimeout);
+      return this;
+    }
+
+    /**
+     * Set the Gzip compression level to use, 0-9 or -1 for default.
+     *
+     * @param compressionLevel The compression level to use.
+     * @return this config builder.
+     * @see Deflater#setLevel(int)
+     * @see Deflater#DEFAULT_COMPRESSION
+     * @see Deflater#BEST_COMPRESSION
+     * @see Deflater#BEST_SPEED
+     */
+    public Builder compressionLevel(final int compressionLevel) {
+      checkArgument(compressionLevel > -1 && compressionLevel <= 9, "compressionLevel must be -1 or 0-9.");
+      this.compressionLevel = compressionLevel;
       return this;
     }
 

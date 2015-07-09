@@ -18,6 +18,7 @@ package com.spotify.google.cloud.pubsub.client;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.googleapis.util.Utils;
+import com.google.api.client.repackaged.com.google.common.base.Strings;
 import com.google.common.io.BaseEncoding;
 import com.google.common.util.concurrent.Futures;
 
@@ -43,6 +44,7 @@ import javax.net.ssl.SSLContext;
 import static com.spotify.google.cloud.pubsub.client.Util.TEST_TOPIC_PREFIX;
 import static java.lang.System.out;
 import static java.util.stream.Collectors.toList;
+import static java.util.zip.Deflater.BEST_SPEED;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
@@ -146,10 +148,26 @@ public class PubsubIntegrationTest {
 
   @Test
   public void testPublish() throws IOException, ExecutionException, InterruptedException {
+    pubsub.createTopic(PROJECT, TOPIC).get();
     final String data = BaseEncoding.base64().encode("hello world".getBytes("UTF-8"));
     final Message message = new MessageBuilder().data(data).build();
-    final List<String> response = pubsub.publish(PROJECT, "dano-test", message).get();
+    final List<String> response = pubsub.publish(PROJECT, TOPIC, message).get();
     out.println(response);
+  }
+
+  @Test
+  public void testBestSpeedCompressionPublish() throws IOException, ExecutionException, InterruptedException {
+    pubsub = Pubsub.builder()
+        .maxConnections(CONCURRENCY)
+        .credential(CREDENTIAL)
+        .compressionLevel(BEST_SPEED)
+        .build();
+    pubsub.createTopic(PROJECT, TOPIC).get();
+    final String data = BaseEncoding.base64().encode(Strings.repeat("hello world", 100).getBytes("UTF-8"));
+    final Message message = new MessageBuilder().data(data).build();
+    final PubsubFuture<List<String>> future = pubsub.publish(PROJECT, TOPIC, message);
+    out.println("raw size: " + data.length());
+    out.println("payload size: " + future.payloadSize());
   }
 
   @Test
