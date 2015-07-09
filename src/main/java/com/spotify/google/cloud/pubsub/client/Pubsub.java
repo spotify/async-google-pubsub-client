@@ -203,7 +203,7 @@ public class Pubsub implements Closeable {
    * @return A future that is completed when this request is completed.
    */
   public PubsubFuture<TopicList> listTopics(final String project,
-                                                 final String pageToken) {
+                                            final String pageToken) {
     final StringBuilder uri = new StringBuilder().append(baseUri)
         .append("/projects/").append(project).append("/topics");
     if (pageToken != null) {
@@ -220,7 +220,7 @@ public class Pubsub implements Closeable {
    * @return A future that is completed when this request is completed.
    */
   public PubsubFuture<Topic> createTopic(final String project,
-                                              final String topic) {
+                                         final String topic) {
     return createTopic(canonicalTopic(project, topic));
   }
 
@@ -242,7 +242,7 @@ public class Pubsub implements Closeable {
    * @return A future that is completed when this request is completed.
    */
   private PubsubFuture<Topic> createTopic(final String canonicalTopic,
-                                               final Topic req) {
+                                          final Topic req) {
     validateCanonicalTopic(canonicalTopic);
     final String uri = baseUri + "/" + canonicalTopic;
     return put("create topic", uri, req, Topic.class);
@@ -283,7 +283,7 @@ public class Pubsub implements Closeable {
    * if the response is 404.
    */
   public PubsubFuture<Void> deleteTopic(final String project,
-                                             final String topic) {
+                                        final String topic) {
     return deleteTopic(canonicalTopic(project, topic));
   }
 
@@ -309,7 +309,7 @@ public class Pubsub implements Closeable {
    * @return a future that is completed with a list of message ID's for the published messages.
    */
   public PubsubFuture<List<String>> publish(final String project, final String topic,
-                                                 final Message... messages) {
+                                            final Message... messages) {
     return publish(project, topic, asList(messages));
   }
 
@@ -322,7 +322,7 @@ public class Pubsub implements Closeable {
    * @return a future that is completed with a list of message ID's for the published messages.
    */
   public PubsubFuture<List<String>> publish(final String project, final String topic,
-                                                 final List<Message> messages) {
+                                            final List<Message> messages) {
     final String uri = baseUri + "/projects/" + project + "/topics/" + topic + ":publish";
     return post("publish", uri, PublishRequest.of(messages), PublishResponse.class)
         .thenApply(PublishResponse::messageIds);
