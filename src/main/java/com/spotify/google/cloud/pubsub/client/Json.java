@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 
 import java.io.IOException;
+import java.io.OutputStream;
 
 import io.norberg.automatter.jackson.AutoMatterModule;
 
@@ -42,6 +43,14 @@ class Json {
   static byte[] write(final Object value) {
     try {
       return MAPPER.writeValueAsBytes(value);
+    } catch (JsonProcessingException e) {
+      throw Throwables.propagate(e);
+    }
+  }
+
+  static void write(final OutputStream stream, final Object value) throws IOException {
+    try {
+      MAPPER.writeValue(stream, value);
     } catch (JsonProcessingException e) {
       throw Throwables.propagate(e);
     }

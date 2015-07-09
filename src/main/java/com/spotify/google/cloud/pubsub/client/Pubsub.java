@@ -20,7 +20,6 @@ import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.googleapis.util.Utils;
 import com.google.api.client.repackaged.com.google.common.base.Throwables;
-import com.google.common.net.HttpHeaders;
 
 import com.ning.http.client.AsyncHandler;
 import com.ning.http.client.AsyncHttpClient;
@@ -44,12 +43,16 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.zip.GZIPOutputStream;
 
 import static com.google.common.util.concurrent.MoreExecutors.getExitingScheduledExecutorService;
 import static com.spotify.google.cloud.pubsub.client.Topic.canonicalTopic;
 import static com.spotify.google.cloud.pubsub.client.Topic.validateCanonicalTopic;
 import static java.util.Arrays.asList;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.CONTENT_ENCODING;
+import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
+import static org.jboss.netty.handler.codec.http.HttpHeaders.Values.GZIP;
 
 /**
  * An async low-level Google Cloud Pub/Sub client.
@@ -376,8 +379,9 @@ public class Pubsub implements Closeable {
         .setHeader("User-Agent", USER_AGENT);
 
     if (payload != NO_PAYLOAD) {
-      final byte[] json = Json.write(payload);
-      builder.setHeader(HttpHeaders.CONTENT_LENGTH, String.valueOf(json.length));
+      final byte[] json = gzipJson(payload);
+      builder.setHeader(CONTENT_ENCODING, GZIP);
+      builder.setHeader(CONTENT_LENGTH, String.valueOf(json.length));
       builder.setBody(json);
     }
 
@@ -440,6 +444,18 @@ public class Pubsub implements Closeable {
     });
 
     return future;
+  }
+
+  private byte[] gzipJson(final Object payload) {
+    try (
+        final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        final GZIPOutputStream gzip = new GZIPOutputStream(bytes);
+    ) {
+      Json.write(gzip, payload);
+      return bytes.toByteArray();
+    } catch (IOException e) {
+      throw Throwables.propagate(e);
+    }
   }
 
   /**
