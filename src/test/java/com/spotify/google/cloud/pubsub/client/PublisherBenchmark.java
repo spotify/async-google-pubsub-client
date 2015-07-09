@@ -27,10 +27,15 @@ import com.spotify.logging.LoggingConfigurator;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
+import java.util.zip.Deflater;
+
+import javax.net.ssl.SSLContext;
 
 import static com.spotify.logging.LoggingConfigurator.Level.WARN;
 import static java.util.stream.Collectors.toList;
@@ -58,6 +63,8 @@ public class PublisherBenchmark {
     final Pubsub pubsub = Pubsub.builder()
         .credential(credential)
         .maxConnections(256)
+        .compressionLevel(Deflater.BEST_SPEED)
+        .enabledCipherSuites(nonGcmCiphers())
         .build();
 
     final Publisher publisher = Publisher.builder()
@@ -121,5 +128,25 @@ public class PublisherBenchmark {
       meter.inc(1, latency);
       benchSend(publisher, messages, topics, meter);
     });
+  }
+
+  /**
+   * Use non-GCM ciphers for now as the GCM performance in Java 8 (pre 8u60) is not good.
+   *
+   * https://bugs.openjdk.java.net/browse/JDK-8069072
+   */
+  private static String[] nonGcmCiphers() {
+    final SSLContext sslContext;
+    try {
+      sslContext = SSLContext.getDefault();
+    } catch (NoSuchAlgorithmException e) {
+      throw Throwables.propagate(e);
+    }
+
+    final String[] defaultCiphers = sslContext.getDefaultSSLParameters().getCipherSuites();
+
+    return Stream.of(defaultCiphers)
+        .filter(cipher -> !cipher.contains("GCM"))
+        .toArray(String[]::new);
   }
 }
