@@ -55,7 +55,7 @@ public class PublisherTest {
 
   @Captor ArgumentCaptor<CompletableFuture<List<String>>> batchFutureCaptor;
 
-  final ConcurrentMap<String, BlockingQueue<CompletableFuture<List<String>>>> topics = new ConcurrentHashMap<>();
+  final ConcurrentMap<String, BlockingQueue<PubsubFuture<List<String>>>> topics = new ConcurrentHashMap<>();
 
   private Publisher publisher;
 
@@ -89,8 +89,8 @@ public class PublisherTest {
 
   @Test
   public void testOutstandingRequests() throws InterruptedException, ExecutionException {
-    final LinkedBlockingQueue<CompletableFuture<List<String>>> t1 = new LinkedBlockingQueue<>();
-    final LinkedBlockingQueue<CompletableFuture<List<String>>> t2 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<PubsubFuture<List<String>>> t1 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<PubsubFuture<List<String>>> t2 = new LinkedBlockingQueue<>();
     topics.put("t1", t1);
     topics.put("t2", t2);
 
@@ -109,20 +109,20 @@ public class PublisherTest {
     assertThat(publisher.outstandingRequests(), is(2));
 
     // Respond to the first request and verify that the outstanding request counter falls to 1
-    t1.take().complete(singletonList("id1"));
+    t1.take().succeed(singletonList("id1"));
     f1.get();
     assertThat(publisher.outstandingRequests(), is(1));
 
     // Respond to the second request and verify that the outstanding request counter falls to 0
-    t2.take().complete(singletonList("id2"));
+    t2.take().succeed(singletonList("id2"));
     f2.get();
     assertThat(publisher.outstandingRequests(), is(0));
   }
 
   @Test
   public void testPendingTopics() throws InterruptedException, ExecutionException {
-    final LinkedBlockingQueue<CompletableFuture<List<String>>> t1 = new LinkedBlockingQueue<>();
-    final LinkedBlockingQueue<CompletableFuture<List<String>>> t2 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<PubsubFuture<List<String>>> t1 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<PubsubFuture<List<String>>> t2 = new LinkedBlockingQueue<>();
     topics.put("t1", t1);
     topics.put("t2", t2);
 
@@ -149,7 +149,7 @@ public class PublisherTest {
     assertThat(publisher.pendingTopics(), is(1));
 
     // Respond to the first request and verify that the pending topics falls to 0
-    t1.take().complete(singletonList("id1"));
+    t1.take().succeed(singletonList("id1"));
     f1.get();
     assertThat(publisher.pendingTopics(), is(0));
   }
@@ -165,8 +165,8 @@ public class PublisherTest {
         .concurrency(1)
         .build();
 
-    final LinkedBlockingQueue<CompletableFuture<List<String>>> t1 = new LinkedBlockingQueue<>();
-    final LinkedBlockingQueue<CompletableFuture<List<String>>> t2 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<PubsubFuture<List<String>>> t1 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<PubsubFuture<List<String>>> t2 = new LinkedBlockingQueue<>();
     topics.put("t1", t1);
     topics.put("t2", t2);
 
@@ -191,7 +191,7 @@ public class PublisherTest {
     verify(listener).topicPending(publisher, "t2", 1, 1);
 
     // Respond to the first request and verify that the batch future is completed
-    t1.take().complete(singletonList("id1"));
+    t1.take().succeed(singletonList("id1"));
     final List<String> batchIds1 = batchFutureCaptor.getValue().get();
     assertThat(batchIds1, contains("id1"));
 
@@ -200,7 +200,7 @@ public class PublisherTest {
         eq(publisher), eq("t2"), eq(asList(m2a, m2b)), batchFutureCaptor.capture());
 
     // Respond to the second requests and verify that the batch future is completed
-    t2.take().complete(asList("id2a", "id2b"));
+    t2.take().succeed(asList("id2a", "id2b"));
     final List<String> batchIds2 = batchFutureCaptor.getValue().get();
     assertThat(batchIds2, contains("id2a", "id2b"));
 
@@ -244,7 +244,7 @@ public class PublisherTest {
 
   @Test
   public void testQueueSize() throws InterruptedException, ExecutionException {
-    final LinkedBlockingQueue<CompletableFuture<List<String>>> t = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<PubsubFuture<List<String>>> t = new LinkedBlockingQueue<>();
     topics.put("t", t);
 
 
@@ -274,11 +274,11 @@ public class PublisherTest {
     assertThat(exception(f2), is(instanceOf(QueueFullException.class)));
 
     // Complete the first request
-    t.take().complete(singletonList("id0"));
+    t.take().succeed(singletonList("id0"));
 
     // Verify that the second one is sent and complete it
     verify(pubsub, timeout(1000)).publish(eq("test"), eq("t"), eq(singletonList(m1)));
-    t.take().complete(singletonList("id1"));
+    t.take().succeed(singletonList("id1"));
 
     // Verify that the fast-failed request was not sent
     Thread.sleep(1000);
@@ -305,8 +305,8 @@ public class PublisherTest {
     when(pubsub.publish(anyString(), anyString(), anyListOf(Message.class)))
         .thenAnswer(invocation -> {
           final String topic = (String) invocation.getArguments()[1];
-          final CompletableFuture<List<String>> future = new CompletableFuture<>();
-          final BlockingQueue<CompletableFuture<List<String>>> queue = topics.get(topic);
+          final PubsubFuture<List<String>> future = new PubsubFuture<>("publish", "POST", "/publish", 4711);
+          final BlockingQueue<PubsubFuture<List<String>>> queue = topics.get(topic);
           queue.add(future);
           return future;
         });

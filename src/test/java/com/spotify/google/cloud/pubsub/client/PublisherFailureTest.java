@@ -45,7 +45,7 @@ public class PublisherFailureTest {
 
   Publisher publisher;
 
-  final ConcurrentMap<String, BlockingQueue<CompletableFuture<List<String>>>> topics = new ConcurrentHashMap<>();
+  final ConcurrentMap<String, BlockingQueue<PubsubFuture<List<String>>>> topics = new ConcurrentHashMap<>();
 
   @Before
   public void setUp() {
@@ -59,8 +59,8 @@ public class PublisherFailureTest {
     when(pubsub.publish(anyString(), anyString(), anyListOf(Message.class)))
         .thenAnswer(invocation -> {
           final String topic = (String) invocation.getArguments()[1];
-          final CompletableFuture<List<String>> future = new CompletableFuture<>();
-          final BlockingQueue<CompletableFuture<List<String>>> queue = topics.get(topic);
+          final PubsubFuture<List<String>> future = new PubsubFuture<>("publish", "POST", "/publish", 4711);
+          final BlockingQueue<PubsubFuture<List<String>>> queue = topics.get(topic);
           queue.add(future);
           return future;
         });
@@ -68,8 +68,8 @@ public class PublisherFailureTest {
 
   @Test
   public void testTimeout() throws InterruptedException, ExecutionException {
-    final LinkedBlockingQueue<CompletableFuture<List<String>>> t1 = new LinkedBlockingQueue<>();
-    final LinkedBlockingQueue<CompletableFuture<List<String>>> t2 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<PubsubFuture<List<String>>> t1 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<PubsubFuture<List<String>>> t2 = new LinkedBlockingQueue<>();
     topics.put("t1", t1);
     topics.put("t2", t2);
 
@@ -78,13 +78,13 @@ public class PublisherFailureTest {
 
     // Fail the first request
     final CompletableFuture<String> f1 = publisher.publish("t1", m1);
-    final CompletableFuture<List<String>> r1 = t1.take();
-    r1.completeExceptionally(new TimeoutException());
+    final PubsubFuture<List<String>> r1 = t1.take();
+    r1.fail(new TimeoutException());
 
     // Verify that the second request goes through
     final CompletableFuture<String> f2 = publisher.publish("t2", m2);
-    final CompletableFuture<List<String>> r2 = t2.take();
-    r2.complete(singletonList("id2"));
+    final PubsubFuture<List<String>> r2 = t2.take();
+    r2.succeed(singletonList("id2"));
     final String id2 = f2.get();
     assertThat(id2, is(r2.get().get(0)));
   }

@@ -158,7 +158,7 @@ public class Pubsub implements Closeable {
    * Get a future that is completed when this {@link Pubsub} client is closed.
    */
   public CompletableFuture<Void> closeFuture() {
-    return closeFuture.thenApply(ignore -> null);
+    return closeFuture;
   }
 
   /**
@@ -190,9 +190,9 @@ public class Pubsub implements Closeable {
    * @param project The Google Cloud project.
    * @return A future that is completed when this request is completed.
    */
-  public CompletableFuture<TopicList> listTopics(final String project) {
+  public PubsubFuture<TopicList> listTopics(final String project) {
     final String uri = baseUri + "/projects/" + project + "/topics";
-    return get(uri, TopicList.class);
+    return get("list topics", uri, TopicList.class);
   }
 
   /**
@@ -202,14 +202,14 @@ public class Pubsub implements Closeable {
    * @param pageToken A token for the page of topics to get.
    * @return A future that is completed when this request is completed.
    */
-  public CompletableFuture<TopicList> listTopics(final String project,
+  public PubsubFuture<TopicList> listTopics(final String project,
                                                  final String pageToken) {
     final StringBuilder uri = new StringBuilder().append(baseUri)
         .append("/projects/").append(project).append("/topics");
     if (pageToken != null) {
       uri.append("?pageToken=").append(pageToken);
     }
-    return get(uri.toString(), TopicList.class);
+    return get("list topics", uri.toString(), TopicList.class);
   }
 
   /**
@@ -219,7 +219,7 @@ public class Pubsub implements Closeable {
    * @param topic   The name of the topic to create.
    * @return A future that is completed when this request is completed.
    */
-  public CompletableFuture<Topic> createTopic(final String project,
+  public PubsubFuture<Topic> createTopic(final String project,
                                               final String topic) {
     return createTopic(canonicalTopic(project, topic));
   }
@@ -230,7 +230,7 @@ public class Pubsub implements Closeable {
    * @param canonicalTopic The canonical (including project) name of the topic to create.
    * @return A future that is completed when this request is completed.
    */
-  public CompletableFuture<Topic> createTopic(final String canonicalTopic) {
+  public PubsubFuture<Topic> createTopic(final String canonicalTopic) {
     return createTopic(canonicalTopic, Topic.of(canonicalTopic));
   }
 
@@ -241,11 +241,11 @@ public class Pubsub implements Closeable {
    * @param req            The payload of the create request. This seems to be ignore in the current API version.
    * @return A future that is completed when this request is completed.
    */
-  private CompletableFuture<Topic> createTopic(final String canonicalTopic,
+  private PubsubFuture<Topic> createTopic(final String canonicalTopic,
                                                final Topic req) {
     validateCanonicalTopic(canonicalTopic);
     final String uri = baseUri + "/" + canonicalTopic;
-    return put(uri, req, Topic.class);
+    return put("create topic", uri, req, Topic.class);
   }
 
   /**
@@ -256,9 +256,9 @@ public class Pubsub implements Closeable {
    * @return A future that is completed when this request is completed. The future will be completed with {@code null}
    * if the response is 404.
    */
-  public CompletableFuture<Topic> getTopic(final String project, final String topic) {
+  public PubsubFuture<Topic> getTopic(final String project, final String topic) {
     final String uri = baseUri + "/" + canonicalTopic(project, topic);
-    return get(uri, Topic.class);
+    return get("get topic", uri, Topic.class);
   }
 
   /**
@@ -268,10 +268,10 @@ public class Pubsub implements Closeable {
    * @return A future that is completed when this request is completed. The future will be completed with {@code null}
    * if the response is 404.
    */
-  public CompletableFuture<Topic> getTopic(final String canonicalTopic) {
+  public PubsubFuture<Topic> getTopic(final String canonicalTopic) {
     validateCanonicalTopic(canonicalTopic);
     final String uri = baseUri + "/" + canonicalTopic;
-    return get(uri, Topic.class);
+    return get("get topic", uri, Topic.class);
   }
 
   /**
@@ -282,7 +282,7 @@ public class Pubsub implements Closeable {
    * @return A future that is completed when this request is completed. The future will be completed with {@code null}
    * if the response is 404.
    */
-  public CompletableFuture<Void> deleteTopic(final String project,
+  public PubsubFuture<Void> deleteTopic(final String project,
                                              final String topic) {
     return deleteTopic(canonicalTopic(project, topic));
   }
@@ -294,10 +294,10 @@ public class Pubsub implements Closeable {
    * @return A future that is completed when this request is completed. The future will be completed with {@code null}
    * if the response is 404.
    */
-  public CompletableFuture<Void> deleteTopic(final String canonicalTopic) {
+  public PubsubFuture<Void> deleteTopic(final String canonicalTopic) {
     validateCanonicalTopic(canonicalTopic);
     final String uri = baseUri + "/" + canonicalTopic;
-    return delete(uri, Void.class);
+    return delete("delete topic", uri, Void.class);
   }
 
   /**
@@ -308,7 +308,7 @@ public class Pubsub implements Closeable {
    * @param messages The batch of messages.
    * @return a future that is completed with a list of message ID's for the published messages.
    */
-  public CompletableFuture<List<String>> publish(final String project, final String topic,
+  public PubsubFuture<List<String>> publish(final String project, final String topic,
                                                  final Message... messages) {
     return publish(project, topic, asList(messages));
   }
@@ -321,56 +321,56 @@ public class Pubsub implements Closeable {
    * @param messages The batch of messages.
    * @return a future that is completed with a list of message ID's for the published messages.
    */
-  public CompletableFuture<List<String>> publish(final String project, final String topic,
+  public PubsubFuture<List<String>> publish(final String project, final String topic,
                                                  final List<Message> messages) {
     final String uri = baseUri + "/projects/" + project + "/topics/" + topic + ":publish";
-    return post(uri, PublishRequest.of(messages), PublishResponse.class)
+    return post("publish", uri, PublishRequest.of(messages), PublishResponse.class)
         .thenApply(PublishResponse::messageIds);
   }
 
   /**
    * Make a GET request.
    */
-  private <T> CompletableFuture<T> get(final String uri, final Class<T> responseClass) {
-    return request(HttpMethod.GET, uri, responseClass);
+  private <T> PubsubFuture<T> get(final String operation, final String uri, final Class<T> responseClass) {
+    return request(operation, HttpMethod.GET, uri, responseClass);
   }
 
   /**
    * Make a POST request.
    */
-  private <T> CompletableFuture<T> post(final String uri, final Object payload,
-                                        final Class<T> responseClass) {
-    return request(HttpMethod.POST, uri, responseClass, payload);
+  private <T> PubsubFuture<T> post(final String operation, final String uri, final Object payload,
+                                   final Class<T> responseClass) {
+    return request(operation, HttpMethod.POST, uri, responseClass, payload);
   }
 
   /**
    * Make a PUT request.
    */
-  private <T> CompletableFuture<T> put(final String uri, final Object payload,
-                                       final Class<T> responseClass) {
-    return request(HttpMethod.PUT, uri, responseClass, payload);
+  private <T> PubsubFuture<T> put(final String operation, final String uri, final Object payload,
+                                  final Class<T> responseClass) {
+    return request(operation, HttpMethod.PUT, uri, responseClass, payload);
   }
 
   /**
    * Make a DELETE request.
    */
-  private <T> CompletableFuture<T> delete(final String uri, final Class<T> responseClass) {
-    return request(HttpMethod.DELETE, uri, responseClass);
+  private <T> PubsubFuture<T> delete(final String operation, final String uri, final Class<T> responseClass) {
+    return request(operation, HttpMethod.DELETE, uri, responseClass);
   }
 
   /**
    * Make an HTTP request.
    */
-  private <T> CompletableFuture<T> request(final HttpMethod method, final String uri,
-                                           final Class<T> responseClass) {
-    return request(method, uri, responseClass, NO_PAYLOAD);
+  private <T> PubsubFuture<T> request(final String operation, final HttpMethod method, final String uri,
+                                      final Class<T> responseClass) {
+    return request(operation, method, uri, responseClass, NO_PAYLOAD);
   }
 
   /**
    * Make an HTTP request.
    */
-  private <T> CompletableFuture<T> request(final HttpMethod method, final String uri,
-                                           final Class<T> responseClass, final Object payload) {
+  private <T> PubsubFuture<T> request(final String operation, final HttpMethod method, final String uri,
+                                      final Class<T> responseClass, final Object payload) {
 
     final RequestBuilder builder = new RequestBuilder()
         .setUrl(uri)
@@ -378,22 +378,26 @@ public class Pubsub implements Closeable {
         .setHeader("Authorization", "Bearer " + accessToken)
         .setHeader("User-Agent", USER_AGENT);
 
+    final long payloadSize;
     if (payload != NO_PAYLOAD) {
       final byte[] json = gzipJson(payload);
+      payloadSize = json.length;
       builder.setHeader(CONTENT_ENCODING, GZIP);
       builder.setHeader(CONTENT_LENGTH, String.valueOf(json.length));
       builder.setBody(json);
+    } else {
+      payloadSize = 0;
     }
 
     final Request request = builder.build();
 
-    final CompletableFuture<T> future = new CompletableFuture<>();
+    final PubsubFuture<T> future = new PubsubFuture<>(operation, method.toString(), uri, payloadSize);
     client.executeRequest(request, new AsyncHandler<Void>() {
       private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 
       @Override
       public void onThrowable(final Throwable t) {
-        future.completeExceptionally(t);
+        future.fail(t);
       }
 
       @Override
@@ -407,20 +411,19 @@ public class Pubsub implements Closeable {
 
         // Return null for 404'd GET & DELETE requests
         if (status.getStatusCode() == 404 && method == HttpMethod.GET || method == HttpMethod.DELETE) {
-          future.complete(null);
+          future.succeed(null);
           return STATE.ABORT;
         }
 
         // Fail on non-2xx responses
         final int statusCode = status.getStatusCode();
         if (!(statusCode >= 200 && statusCode < 300)) {
-          future.completeExceptionally(
-              new RequestFailedException(status.getStatusCode(), status.getStatusText()));
+          future.fail(new RequestFailedException(status.getStatusCode(), status.getStatusText()));
           return STATE.ABORT;
         }
 
         if (responseClass == Void.class) {
-          future.complete(null);
+          future.succeed(null);
           return STATE.ABORT;
         }
 
@@ -434,10 +437,13 @@ public class Pubsub implements Closeable {
 
       @Override
       public Void onCompleted() throws Exception {
+        if (future.isDone()) {
+          return null;
+        }
         try {
-          future.complete(Json.read(bytes.toByteArray(), responseClass));
+          future.succeed(Json.read(bytes.toByteArray(), responseClass));
         } catch (IOException e) {
-          future.completeExceptionally(e);
+          future.fail(e);
         }
         return null;
       }
