@@ -389,7 +389,7 @@ public class Publisher implements Closeable {
     }
 
     /**
-     * Set the Google Cloud Pub/Sub request concurrency level. Default is {@code 64}.
+     * Set a {@link Listener} for monitoring operations performed by the {@link Publisher}.
      */
     public Builder listener(final Listener listener) {
       this.listener = listener;
