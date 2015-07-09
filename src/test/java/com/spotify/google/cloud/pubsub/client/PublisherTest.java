@@ -53,7 +53,7 @@ public class PublisherTest {
   @Mock Pubsub pubsub;
   @Mock Publisher.Listener listener;
 
-  @Captor ArgumentCaptor<CompletableFuture<List<String>>> batchFutureCaptor;
+  @Captor ArgumentCaptor<PubsubFuture<List<String>>> batchFutureCaptor;
 
   final ConcurrentMap<String, BlockingQueue<PubsubFuture<List<String>>>> topics = new ConcurrentHashMap<>();
 

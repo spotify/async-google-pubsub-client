@@ -72,7 +72,20 @@ public class Publisher implements Closeable {
      * @param batch     The batch of messages being sent.
      * @param future    The future result of the entire batch.
      */
+    @Deprecated
     void sendingBatch(Publisher publisher, String topic, List<Message> batch, CompletableFuture<List<String>> future);
+
+    /**
+     * Called when a {@link Publisher} is sending a batch of messages to Google Cloud Pub/Sub.
+     *
+     * @param publisher The {@link Publisher}
+     * @param topic     The topic of the message batch.
+     * @param batch     The batch of messages being sent.
+     * @param future    The future result of the entire batch.
+     */
+    default void sendingBatch(Publisher publisher, String topic, List<Message> batch, PubsubFuture<List<String>> future) {
+      sendingBatch(publisher, topic, batch, (CompletableFuture<List<String>>) future);
+    }
 
     /**
      * Called when a topic is enqueued as pending for future batch sending due to the publisher hitting the concurrency
@@ -267,7 +280,7 @@ public class Publisher implements Closeable {
 
       // Send the batch request and increment the outstanding request counter
       outstanding.incrementAndGet();
-      final CompletableFuture<List<String>> batchFuture = pubsub.publish(project, topic, batch);
+      final PubsubFuture<List<String>> batchFuture = pubsub.publish(project, topic, batch);
       listener.sendingBatch(Publisher.this, topic, unmodifiableList(batch), batchFuture);
       batchFuture.whenComplete(
           (List<String> messageIds, Throwable ex) -> {
@@ -419,7 +432,11 @@ public class Publisher implements Closeable {
     @Override
     public void publishingMessage(final Publisher publisher, final String topic, final Message message,
                                   final CompletableFuture<String> future) {
+    }
 
+    @Override
+    public void sendingBatch(final Publisher publisher, final String topic, final List<Message> batch,
+                             final PubsubFuture<List<String>> future) {
     }
 
     @Override
