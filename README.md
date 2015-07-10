@@ -6,7 +6,7 @@ A performant Google Pub/Sub (https://cloud.google.com/pubsub/) client.
 What
 ----
 
-A low level Pub/Sub client and a concurrent per-topic batching Publisher. 
+A low level Pub/Sub client and a concurrent per-topic batching Publisher.
 
 Why
 ---
@@ -97,6 +97,49 @@ $ mvn exec:java -Dexec.mainClass="com.spotify.google.cloud.pubsub.client.Publish
    7s:      113,751 messages/s.       905.039 ms avg latency.    (total:      615,845)
    8s:      110,656 messages/s.       887.875 ms avg latency.    (total:      726,924)
 ```
+
+
+Releasing
+---------
+
+We tag releases on github and publish release jars to maven central hosted by
+Sonatype: <http://central.sonatype.org>
+
+### Prerequisites
+
+
+1. Sonatype credentials for publishing to maven central. Apply for permission
+   to publish jars on the `com.spotify` group id.
+   See <http://central.sonatype.org/pages/ossrh-guide.html>.
+
+2. Add the sonatype credentials to `~/.m2/settings.xml`
+
+        <server>
+          <id>ossrh</id>
+          <username>YOUR_SONATYPE_USER</username>
+          <password>YOUR_SONATYPE_PASS</password>
+        </server>
+
+3. Set up GnuPG. See <http://central.sonatype.org/pages/working-with-pgp-signatures.html>
+
+
+### Performing a Release
+
+Have your GnuPG password ready. Both prepare and perform steps will ask you for it.
+
+*Note:* The current tests run during both `prepare` and `perform` include
+        integration tests against the real Google Pub/Sub API. Verify
+        that you have a suitable default project and credentials
+        configured with the `gcloud` cli.
+
+1. Tag and push a new release to github:
+
+        mvn release:prepare
+
+2. Publish the signed jar to maven central:
+
+        mvn release:perform
+
 
 Todo
 ----
