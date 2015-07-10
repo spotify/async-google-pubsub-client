@@ -83,7 +83,8 @@ public class Publisher implements Closeable {
      * @param batch     The batch of messages being sent.
      * @param future    The future result of the entire batch.
      */
-    default void sendingBatch(Publisher publisher, String topic, List<Message> batch, PubsubFuture<List<String>> future) {
+    default void sendingBatch(Publisher publisher, String topic, List<Message> batch,
+                              PubsubFuture<List<String>> future) {
       sendingBatch(publisher, topic, batch, (CompletableFuture<List<String>>) future);
     }
 
@@ -230,49 +231,59 @@ public class Publisher implements Closeable {
 
       queue.add(new QueuedMessage(message, future));
 
-      if (!pending) {
-        send();
-      }
+      send();
 
       return future;
     }
 
     /**
-     * Send a batch of messages. If the concurrency level of the publisher has already been reached, enqueue this topic
-     * onto the pending queue for later dispatch.
+     * Attempt to start sending this topic. If the concurrency level of the publisher has already been reached, enqueue
+     * this topic onto the pending queue for later sending.
      */
     private void send() {
-      // Too many outstanding already? Add to pending queue
-      final int currentOutstanding = outstanding.get();
-      if (currentOutstanding >= concurrency) {
-        pending = true;
-        pendingTopics.offer(this);
-
-        // Tell the listener that a batch is pending
-        listener.topicPending(Publisher.this, topic, currentOutstanding, concurrency);
-
-        // Check if we lost a race while enqueing this topic and should proceed with sending immediately
-        if (outstanding.get() >= concurrency) {
-          return;
-        }
+      if (pending) {
+        return;
       }
 
-      // Good to go. Clear the pending flag.
-      pending = false;
+      final int currentOutstanding = outstanding.get();
 
+      // Below outstanding limit so we can send immediately?
+      if (currentOutstanding < concurrency) {
+        sendBatch();
+        return;
+      }
+
+      // Enqueue as pending for later sending
+      pending = true;
+      pendingTopics.offer(this);
+
+      // Tell the listener that a topic became pending
+      listener.topicPending(Publisher.this, topic, currentOutstanding, concurrency);
+
+      // Attempt to send pending to guard against losing a race while enqueueing this topic as pending.
+      sendPending();
+    }
+
+    /**
+     * Send a batch of messages.
+     */
+    private int sendBatch() {
       final List<Message> batch = new ArrayList<>();
       final List<CompletableFuture<String>> futures = new ArrayList<>();
 
       // Drain queue up to batch size
-      QueuedMessage message;
-      while ((message = queue.poll()) != null && batch.size() < batchSize) {
+      while (batch.size() < batchSize) {
+        final QueuedMessage message = queue.poll();
+        if (message == null) {
+          break;
+        }
         batch.add(message.message);
         futures.add(message.future);
       }
 
       // Was there anything to send?
       if (batch.size() == 0) {
-        return;
+        return 0;
       }
 
       // Decrement the queue size counter
@@ -312,16 +323,29 @@ public class Publisher implements Closeable {
 
           // When batch is complete, process pending topics.
           .whenComplete((v, t) -> sendPending());
+
+      return batch.size();
     }
   }
 
   /**
-   * Send a pending topic, if any.
+   * Send any pending topics.
    */
   private void sendPending() {
-    final TopicQueue queue = pendingTopics.poll();
-    if (queue != null) {
-      queue.send();
+    while (outstanding.get() < concurrency) {
+      final TopicQueue queue = pendingTopics.poll();
+      if (queue == null) {
+        return;
+      }
+
+      queue.pending = false;
+      final int sent = queue.sendBatch();
+
+      // Did we send a whole batch? Then there might be more messages in the queue. Mark as pending again.
+      if (sent == batchSize) {
+        queue.pending = true;
+        pendingTopics.offer(queue);
+      }
     }
   }
 

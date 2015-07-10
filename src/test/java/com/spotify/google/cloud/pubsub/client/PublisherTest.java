@@ -16,6 +16,8 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
+import com.google.common.collect.ImmutableSet;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -25,6 +27,7 @@ import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,11 +35,16 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import static com.google.common.collect.Iterables.concat;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static java.util.stream.Collectors.toList;
+import static java.util.stream.IntStream.range;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.anyListOf;
 import static org.mockito.Matchers.anyString;
@@ -55,7 +63,7 @@ public class PublisherTest {
 
   @Captor ArgumentCaptor<PubsubFuture<List<String>>> batchFutureCaptor;
 
-  final ConcurrentMap<String, BlockingQueue<PubsubFuture<List<String>>>> topics = new ConcurrentHashMap<>();
+  final ConcurrentMap<String, BlockingQueue<Request>> topics = new ConcurrentHashMap<>();
 
   private Publisher publisher;
 
@@ -89,8 +97,8 @@ public class PublisherTest {
 
   @Test
   public void testOutstandingRequests() throws InterruptedException, ExecutionException {
-    final LinkedBlockingQueue<PubsubFuture<List<String>>> t1 = new LinkedBlockingQueue<>();
-    final LinkedBlockingQueue<PubsubFuture<List<String>>> t2 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<Request> t1 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<Request> t2 = new LinkedBlockingQueue<>();
     topics.put("t1", t1);
     topics.put("t2", t2);
 
@@ -109,20 +117,20 @@ public class PublisherTest {
     assertThat(publisher.outstandingRequests(), is(2));
 
     // Respond to the first request and verify that the outstanding request counter falls to 1
-    t1.take().succeed(singletonList("id1"));
+    t1.take().future.succeed(singletonList("id1"));
     f1.get();
     assertThat(publisher.outstandingRequests(), is(1));
 
     // Respond to the second request and verify that the outstanding request counter falls to 0
-    t2.take().succeed(singletonList("id2"));
+    t2.take().future.succeed(singletonList("id2"));
     f2.get();
     assertThat(publisher.outstandingRequests(), is(0));
   }
 
   @Test
   public void testPendingTopics() throws InterruptedException, ExecutionException {
-    final LinkedBlockingQueue<PubsubFuture<List<String>>> t1 = new LinkedBlockingQueue<>();
-    final LinkedBlockingQueue<PubsubFuture<List<String>>> t2 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<Request> t1 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<Request> t2 = new LinkedBlockingQueue<>();
     topics.put("t1", t1);
     topics.put("t2", t2);
 
@@ -149,7 +157,7 @@ public class PublisherTest {
     assertThat(publisher.pendingTopics(), is(1));
 
     // Respond to the first request and verify that the pending topics falls to 0
-    t1.take().succeed(singletonList("id1"));
+    t1.take().future.succeed(singletonList("id1"));
     f1.get();
     assertThat(publisher.pendingTopics(), is(0));
   }
@@ -165,8 +173,8 @@ public class PublisherTest {
         .concurrency(1)
         .build();
 
-    final LinkedBlockingQueue<PubsubFuture<List<String>>> t1 = new LinkedBlockingQueue<>();
-    final LinkedBlockingQueue<PubsubFuture<List<String>>> t2 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<Request> t1 = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<Request> t2 = new LinkedBlockingQueue<>();
     topics.put("t1", t1);
     topics.put("t2", t2);
 
@@ -191,7 +199,7 @@ public class PublisherTest {
     verify(listener).topicPending(publisher, "t2", 1, 1);
 
     // Respond to the first request and verify that the batch future is completed
-    t1.take().succeed(singletonList("id1"));
+    t1.take().future.succeed(singletonList("id1"));
     final List<String> batchIds1 = batchFutureCaptor.getValue().get();
     assertThat(batchIds1, contains("id1"));
 
@@ -200,7 +208,7 @@ public class PublisherTest {
         eq(publisher), eq("t2"), eq(asList(m2a, m2b)), batchFutureCaptor.capture());
 
     // Respond to the second requests and verify that the batch future is completed
-    t2.take().succeed(asList("id2a", "id2b"));
+    t2.take().future.succeed(asList("id2a", "id2b"));
     final List<String> batchIds2 = batchFutureCaptor.getValue().get();
     assertThat(batchIds2, contains("id2a", "id2b"));
 
@@ -244,7 +252,7 @@ public class PublisherTest {
 
   @Test
   public void testQueueSize() throws InterruptedException, ExecutionException {
-    final LinkedBlockingQueue<PubsubFuture<List<String>>> t = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<Request> t = new LinkedBlockingQueue<>();
     topics.put("t", t);
 
     final Message m0 = Message.of("0");
@@ -259,7 +267,6 @@ public class PublisherTest {
         .queueSize(1)
         .build();
 
-
     // Send one message to saturate the concurrency (queue size == 0)
     final CompletableFuture<String> f0 = publisher.publish("t", m0);
     verify(pubsub, timeout(1000)).publish(eq("test"), eq("t"), eq(singletonList(m0)));
@@ -273,15 +280,55 @@ public class PublisherTest {
     assertThat(exception(f2), is(instanceOf(QueueFullException.class)));
 
     // Complete the first request
-    t.take().succeed(singletonList("id0"));
+    t.take().future.succeed(singletonList("id0"));
 
     // Verify that the second one is sent and complete it
     verify(pubsub, timeout(1000)).publish(eq("test"), eq("t"), eq(singletonList(m1)));
-    t.take().succeed(singletonList("id1"));
+    t.take().future.succeed(singletonList("id1"));
 
     // Verify that the fast-failed request was not sent
     Thread.sleep(1000);
     verify(pubsub, never()).publish(anyString(), anyString(), eq(singletonList(m2)));
+  }
+
+  @Test
+  public void verifyConcurrentBacklogConsumption() throws Exception {
+    final LinkedBlockingQueue<Request> t = new LinkedBlockingQueue<>();
+    topics.put("t", t);
+
+    publisher = Publisher.builder()
+        .project("test")
+        .pubsub(pubsub)
+        .listener(listener)
+        .concurrency(2)
+        .batchSize(2)
+        .queueSize(100)
+        .build();
+
+    // Saturate concurrency with two messages
+    final Message m0a = Message.of("0a");
+    final CompletableFuture<String> f0a = publisher.publish("t", m0a);
+    final Request r0a = t.take();
+
+    final Message m0b = Message.of("0b");
+    final CompletableFuture<String> f0b = publisher.publish("t", m0b);
+    final Request r0b = t.take();
+
+    // Enqueue enough for at least two more batches
+    final List<Message> m1 = range(0, 4).mapToObj(String::valueOf).map(Message::of).collect(toList());
+    final List<CompletableFuture<String>> f1 = m1.stream().map(m -> publisher.publish("t", m)).collect(toList());
+
+    // Complete the first two requests
+    r0a.future.succeed(singletonList("0a"));
+    r0b.future.succeed(singletonList("0b"));
+
+    // Verify that two batches kicked off concurrently and that we got all four messages in the two batches
+    final Request r1a = t.poll(30, SECONDS);
+    final Request r1b = t.poll(30, SECONDS);
+    assertThat(r1a, is(notNullValue()));
+    assertThat(r1b, is(notNullValue()));
+    final Set<Message> r1received = ImmutableSet.copyOf(concat(r1a.messages, r1b.messages));
+    assertThat(r1received, is(ImmutableSet.copyOf(m1)));
   }
 
   private Throwable exception(final CompletableFuture<?> f) {
@@ -298,17 +345,30 @@ public class PublisherTest {
     return null;
   }
 
-
   private void setUpPubsubClient() {
     reset(pubsub);
     when(pubsub.publish(anyString(), anyString(), anyListOf(Message.class)))
         .thenAnswer(invocation -> {
           final String topic = (String) invocation.getArguments()[1];
+          @SuppressWarnings("unchecked") final List<Message> messages =
+              (List<Message>) invocation.getArguments()[2];
           final PubsubFuture<List<String>> future = new PubsubFuture<>("publish", "POST", "/publish", 4711);
-          final BlockingQueue<PubsubFuture<List<String>>> queue = topics.get(topic);
-          queue.add(future);
+          final BlockingQueue<Request> queue = topics.get(topic);
+          queue.add(new Request(messages, future));
           return future;
         });
+  }
+
+  private static class Request {
+
+    final List<Message> messages;
+    final PubsubFuture<List<String>> future;
+
+    Request(final List<Message> messages,
+            final PubsubFuture<List<String>> future) {
+      this.messages = messages;
+      this.future = future;
+    }
   }
 
 }
