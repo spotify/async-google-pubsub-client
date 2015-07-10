@@ -21,15 +21,14 @@ Usage
 // Create a topic
 pubsub.createTopic("my-google-cloud-project", "the-topic").get();
 
-// Create a batch of messages
 final List<Message> messages = asList(
     Message.builder()
-        .putAttribute("type", "foo")
-        .data(base64().encode("hello foo".getBytes("UTF-8")))
+        .attributes("type", "foo")
+        .data(encode("hello foo"))
         .build(),
     Message.builder()
-        .putAttribute("type", "bar")
-        .data(base64().encode("hello foo".getBytes("UTF-8")))
+        .attributes("type", "bar")
+        .data(encode("hello foo"))
         .build());
 
 // Publish the messages

@@ -19,7 +19,6 @@ package com.spotify.google.cloud.pubsub.client;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.repackaged.com.google.common.base.Throwables;
 import com.google.api.services.pubsub.PubsubScopes;
-import com.google.common.io.BaseEncoding;
 import com.google.common.util.concurrent.Futures;
 
 import com.spotify.logging.LoggingConfigurator;
@@ -92,8 +91,7 @@ public class PublisherBenchmark {
           while (s.length() < MESSAGE_SIZE) {
             s.append(ThreadLocalRandom.current().nextInt());
           }
-          final String data = BaseEncoding.base64().encode(utf8(s.toString()));
-          return Message.builder().data(data).build();
+          return Message.ofEncoded(s.toString());
         })
         .collect(toList());
 

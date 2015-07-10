@@ -70,8 +70,8 @@ public class PubsubFailureTest {
         .readTimeout(10)
         .build();
 
-    final Message m1 = Message.builder().data("1").build();
-    final Message m2 = Message.builder().data("2").build();
+    final Message m1 = Message.of("1");
+    final Message m2 = Message.of("2");
 
     // Fail first request
     final CompletableFuture<List<String>> f1 = pubsub.publish("test", "t1", m1);

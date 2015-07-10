@@ -73,8 +73,8 @@ public class PublisherFailureTest {
     topics.put("t1", t1);
     topics.put("t2", t2);
 
-    final Message m1 = Message.builder().data("1").build();
-    final Message m2 = Message.builder().data("2").build();
+    final Message m1 = Message.of("1");
+    final Message m2 = Message.of("2");
 
     // Fail the first request
     final CompletableFuture<String> f1 = publisher.publish("t1", m1);

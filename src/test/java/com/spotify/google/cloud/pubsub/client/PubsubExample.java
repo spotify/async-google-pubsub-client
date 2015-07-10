@@ -20,7 +20,7 @@ import java.io.UnsupportedEncodingException;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
-import static com.google.common.io.BaseEncoding.base64;
+import static com.spotify.google.cloud.pubsub.client.Message.encode;
 import static java.util.Arrays.asList;
 
 public class PubsubExample {
@@ -34,12 +34,12 @@ public class PubsubExample {
     // Create a batch of messages
     final List<Message> messages = asList(
         Message.builder()
-            .putAttribute("type", "foo")
-            .data(base64().encode("hello foo".getBytes("UTF-8")))
+            .attributes("type", "foo")
+            .data(encode("hello foo"))
             .build(),
         Message.builder()
-            .putAttribute("type", "bar")
-            .data(base64().encode("hello foo".getBytes("UTF-8")))
+            .attributes("type", "bar")
+            .data(encode("hello foo"))
             .build());
 
     // Publish the messages

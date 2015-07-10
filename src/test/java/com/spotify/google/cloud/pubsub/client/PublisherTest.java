@@ -94,8 +94,8 @@ public class PublisherTest {
     topics.put("t1", t1);
     topics.put("t2", t2);
 
-    final Message m1 = Message.builder().data("1").build();
-    final Message m2 = Message.builder().data("2").build();
+    final Message m1 = Message.of("1");
+    final Message m2 = Message.of("2");
 
     // Verify that the outstanding requests before publishing anything is 0
     assertThat(publisher.outstandingRequests(), is(0));
@@ -133,8 +133,8 @@ public class PublisherTest {
         .concurrency(1)
         .build();
 
-    final Message m1 = Message.builder().data("1").build();
-    final Message m2 = Message.builder().data("2").build();
+    final Message m1 = Message.of("1");
+    final Message m2 = Message.of("2");
 
     // Verify that the pending topics before publishing anything is 0
     assertThat(publisher.pendingTopics(), is(0));
@@ -170,9 +170,9 @@ public class PublisherTest {
     topics.put("t1", t1);
     topics.put("t2", t2);
 
-    final Message m1 = Message.builder().data("1").build();
-    final Message m2a = Message.builder().data("2a").build();
-    final Message m2b = Message.builder().data("2b").build();
+    final Message m1 = Message.of("1");
+    final Message m2a = Message.of("2a");
+    final Message m2b = Message.of("2b");
 
     // Verify that the listener got called when the publisher was created
     verify(listener).publisherCreated(publisher);
@@ -247,10 +247,9 @@ public class PublisherTest {
     final LinkedBlockingQueue<PubsubFuture<List<String>>> t = new LinkedBlockingQueue<>();
     topics.put("t", t);
 
-
-    final Message m0 = Message.builder().data("0").build();
-    final Message m1 = Message.builder().data("1").build();
-    final Message m2 = Message.builder().data("2").build();
+    final Message m0 = Message.of("0");
+    final Message m1 = Message.of("1");
+    final Message m2 = Message.of("2");
 
     publisher = Publisher.builder()
         .project("test")

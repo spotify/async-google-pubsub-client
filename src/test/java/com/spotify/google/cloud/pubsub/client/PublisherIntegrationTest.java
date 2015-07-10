@@ -16,7 +16,6 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
-import com.google.common.io.BaseEncoding;
 import com.google.common.util.concurrent.Futures;
 
 import org.junit.After;
@@ -72,8 +71,7 @@ public class PublisherIntegrationTest {
   @Test
   public void testPublish()
       throws UnsupportedEncodingException, ExecutionException, InterruptedException {
-    final String data = BaseEncoding.base64().encode("hello world".getBytes("UTF-8"));
-    final Message message = Message.builder().data(data).build();
+    final Message message = Message.ofEncoded("hello world");
 
     final List<CompletableFuture<String>> futures = range(0, 10)
         .mapToObj(i -> publisher.publish(TOPIC, message))
