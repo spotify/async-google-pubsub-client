@@ -120,7 +120,8 @@ Sonatype: <http://central.sonatype.org>
           <password>YOUR_SONATYPE_PASS</password>
         </server>
 
-3. Set up GnuPG. See <http://central.sonatype.org/pages/working-with-pgp-signatures.html>
+3. Set up GnuPG. See <http://central.sonatype.org/pages/working-with-pgp-signatures.html>.
+   Make sure that you've distributed your public key to a key server.
 
 
 ### Performing a Release
