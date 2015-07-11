@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.spotify.google.cloud.pubsub.client;
+package com.spotify.google.cloud.pubsub.client.integration;
 
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;

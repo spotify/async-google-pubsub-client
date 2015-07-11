@@ -21,10 +21,24 @@ import java.util.Optional;
 
 import io.norberg.automatter.AutoMatter;
 
+import static java.util.Arrays.asList;
+
 @AutoMatter
 public interface TopicList {
 
   List<Topic> topics();
 
   Optional<String> nextPageToken();
+
+  static TopicListBuilder builder() {
+    return new TopicListBuilder();
+  }
+
+  static TopicList of(Iterable<Topic> topics) {
+    return builder().topics(topics).build();
+  }
+
+  static TopicList of(Topic... topics) {
+    return of(asList(topics));
+  }
 }

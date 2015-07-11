@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
-package com.spotify.google.cloud.pubsub.client;
+package com.spotify.google.cloud.pubsub.client.example;
+
+import com.spotify.google.cloud.pubsub.client.Message;
+import com.spotify.google.cloud.pubsub.client.Publisher;
+import com.spotify.google.cloud.pubsub.client.Pubsub;
 
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;

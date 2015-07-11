@@ -16,10 +16,20 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
+import java.util.regex.Pattern;
+
 import io.norberg.automatter.AutoMatter;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Strings.isNullOrEmpty;
 
 @AutoMatter
 public interface Topic {
+
+  Pattern PATTERN = Pattern.compile("^projects/[^/]*/topics/[^/]*$");
+
+  String PROJECTS = "projects";
+  String TOPICS = "topics";
 
   String name();
 
@@ -36,15 +46,12 @@ public interface Topic {
   }
 
   static String canonicalTopic(final String project, final String topic) {
-    if (topic.contains("/")) {
-      throw new IllegalArgumentException();
-    }
-    return "projects/" + project + "/topics/" + topic;
+    checkArgument(!isNullOrEmpty(project) && !project.contains("/"), "illegal project: %s", project);
+    checkArgument(!isNullOrEmpty(topic) && !topic.contains("/"), "illegal topic: %s", topic);
+    return PROJECTS + '/' + project + '/' + TOPICS + '/' + topic;
   }
 
   static void validateCanonicalTopic(final String canonicalTopic) {
-    if (!canonicalTopic.startsWith("projects/")) {
-      throw new IllegalArgumentException();
-    }
+    checkArgument(PATTERN.matcher(canonicalTopic).matches(), "malformed topic: %s", canonicalTopic);
   }
 }

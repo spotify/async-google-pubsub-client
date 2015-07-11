@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
-package com.spotify.google.cloud.pubsub.client;
+package com.spotify.google.cloud.pubsub.client.integration;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.repackaged.com.google.common.base.Throwables;
 import com.google.api.services.pubsub.PubsubScopes;
 import com.google.common.util.concurrent.Futures;
 
+import com.spotify.google.cloud.pubsub.client.Message;
+import com.spotify.google.cloud.pubsub.client.Publisher;
+import com.spotify.google.cloud.pubsub.client.Pubsub;
 import com.spotify.logging.LoggingConfigurator;
 
 import java.io.FileInputStream;

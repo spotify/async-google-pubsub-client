@@ -14,9 +14,13 @@
  * limitations under the License.
  */
 
-package com.spotify.google.cloud.pubsub.client;
+package com.spotify.google.cloud.pubsub.client.integration;
 
 import com.google.common.util.concurrent.Futures;
+
+import com.spotify.google.cloud.pubsub.client.Message;
+import com.spotify.google.cloud.pubsub.client.Publisher;
+import com.spotify.google.cloud.pubsub.client.Pubsub;
 
 import org.junit.After;
 import org.junit.Before;
@@ -35,7 +39,7 @@ import static java.util.stream.IntStream.range;
 /**
  * Tests publishing to the real Google Cloud Pub/Sub service.
  */
-public class PublisherIntegrationTest {
+public class PublisherIT {
 
   private final String PROJECT = Util.defaultProject();
 

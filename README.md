@@ -74,7 +74,7 @@ Publisher Benchmark
 Note: This benchmark uses a lot of quota and network bandwidth.
 
 ```
-$ mvn exec:java -Dexec.mainClass="com.spotify.google.cloud.pubsub.client.PublisherBenchmark" -Dexec.classpathScope="test"
+$ mvn exec:java -Dexec.mainClass="com.spotify.google.cloud.pubsub.client.integration.PublisherBenchmark" -Dexec.classpathScope="test"
 [INFO] Scanning for projects...
 [INFO] ------------------------------------------------------------------------
 [INFO] Detecting the operating system and CPU architecture

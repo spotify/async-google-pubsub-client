@@ -280,7 +280,9 @@ public class PubsubFuture<T> extends CompletableFuture<T> {
         operation, method, uri, payloadSize);
     future.whenComplete((v, t) -> {
       if (t != null) {
-        pubsubFuture.fail(t);
+        // Unwrap CompletionException (due to using whenComplete)
+        final Throwable cause = t.getCause();
+        pubsubFuture.fail(cause);
       } else {
         pubsubFuture.succeed(v);
       }

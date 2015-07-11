@@ -14,13 +14,20 @@
  * limitations under the License.
  */
 
-package com.spotify.google.cloud.pubsub.client;
+package com.spotify.google.cloud.pubsub.client.integration;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.googleapis.util.Utils;
 import com.google.api.client.repackaged.com.google.common.base.Strings;
 import com.google.common.io.BaseEncoding;
 import com.google.common.util.concurrent.Futures;
+
+import com.spotify.google.cloud.pubsub.client.Message;
+import com.spotify.google.cloud.pubsub.client.MessageBuilder;
+import com.spotify.google.cloud.pubsub.client.Pubsub;
+import com.spotify.google.cloud.pubsub.client.PubsubFuture;
+import com.spotify.google.cloud.pubsub.client.Topic;
+import com.spotify.google.cloud.pubsub.client.TopicList;
 
 import org.junit.After;
 import org.junit.Before;
@@ -41,7 +48,7 @@ import java.util.stream.Stream;
 
 import javax.net.ssl.SSLContext;
 
-import static com.spotify.google.cloud.pubsub.client.Util.TEST_TOPIC_PREFIX;
+import static com.spotify.google.cloud.pubsub.client.integration.Util.TEST_TOPIC_PREFIX;
 import static java.lang.System.out;
 import static java.util.stream.Collectors.toList;
 import static java.util.zip.Deflater.BEST_SPEED;
@@ -55,7 +62,7 @@ import static org.junit.Assert.assertThat;
 /**
  * Tests talking to the real Google Cloud Pub/Sub service.
  */
-public class PubsubIntegrationTest {
+public class PubsubIT {
 
   private static final int CONCURRENCY = 128;
 

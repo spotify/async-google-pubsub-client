@@ -20,6 +20,7 @@ import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.googleapis.util.Utils;
 import com.google.api.client.repackaged.com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableList;
 
 import com.ning.http.client.AsyncHandler;
 import com.ning.http.client.AsyncHttpClient;
@@ -47,6 +48,7 @@ import java.util.zip.Deflater;
 import java.util.zip.GZIPOutputStream;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.util.concurrent.MoreExecutors.getExitingScheduledExecutorService;
 import static com.spotify.google.cloud.pubsub.client.Topic.canonicalTopic;
 import static com.spotify.google.cloud.pubsub.client.Topic.validateCanonicalTopic;
@@ -54,6 +56,7 @@ import static java.util.Arrays.asList;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.CONTENT_ENCODING;
 import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
+import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static org.jboss.netty.handler.codec.http.HttpHeaders.Values.GZIP;
 
 /**
@@ -68,6 +71,11 @@ public class Pubsub implements Closeable {
       "Spotify-Google-Pubsub-Java-Client/" + VERSION + " (gzip)";
 
   private static final Object NO_PAYLOAD = new Object();
+
+  private static final String CLOUD_PLATFORM = "https://www.googleapis.com/auth/cloud-platform";
+  private static final String PUBSUB = "https://www.googleapis.com/auth/pubsub";
+  private static final List<String> SCOPES = ImmutableList.of(CLOUD_PLATFORM, PUBSUB);
+  public static final String APPLICATION_JSON_UTF8 = "application/json; charset=UTF-8";
 
   private final AsyncHttpClient client;
   private final String baseUri;
@@ -107,12 +115,12 @@ public class Pubsub implements Closeable {
     this.compressionLevel = builder.compressionLevel;
 
     if (builder.credential == null) {
-      this.credential = defaultCredential();
+      this.credential = scoped(defaultCredential());
     } else {
-      this.credential = builder.credential;
+      this.credential = scoped(builder.credential);
     }
 
-    this.baseUri = stripTrailingSlash(builder.uri.toString());
+    this.baseUri = builder.uri.toString();
 
     // Get initial access token
     refreshAccessToken();
@@ -124,30 +132,26 @@ public class Pubsub implements Closeable {
     executor.scheduleAtFixedRate(this::refreshAccessToken, 10, 10, SECONDS);
   }
 
+  private Credential scoped(final Credential credential) {
+    if (credential instanceof GoogleCredential) {
+      return scoped((GoogleCredential)credential);
+    }
+    return credential;
+  }
+
+  private Credential scoped(final GoogleCredential credential) {
+    if (credential.createScopedRequired()) {
+      credential.createScoped(SCOPES);
+    }
+    return credential;
+  }
+
   private static Credential defaultCredential() {
     try {
       return GoogleCredential.getApplicationDefault(
           Utils.getDefaultTransport(), Utils.getDefaultJsonFactory());
     } catch (IOException e) {
       throw Throwables.propagate(e);
-    }
-  }
-
-  private String stripTrailingSlash(final String path) {
-    return path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
-  }
-
-  private static int defaultPort(final URI uri) {
-    if (uri.getPort() != -1) {
-      return uri.getPort();
-    }
-    switch (uri.getScheme()) {
-      case "https":
-        return 443;
-      case "http":
-        return 80;
-      default:
-        throw new IllegalArgumentException("Illegal uri: " + uri);
     }
   }
 
@@ -158,6 +162,7 @@ public class Pubsub implements Closeable {
   public void close() {
     executor.shutdown();
     client.close();
+    closeFuture.complete(null);
   }
 
   /**
@@ -197,8 +202,8 @@ public class Pubsub implements Closeable {
    * @return A future that is completed when this request is completed.
    */
   public PubsubFuture<TopicList> listTopics(final String project) {
-    final String uri = baseUri + "/projects/" + project + "/topics";
-    return get("list topics", uri, TopicList.class);
+    final String path = "projects/" + project + "/topics";
+    return get("list topics", path, TopicList.class);
   }
 
   /**
@@ -210,12 +215,9 @@ public class Pubsub implements Closeable {
    */
   public PubsubFuture<TopicList> listTopics(final String project,
                                             final String pageToken) {
-    final StringBuilder uri = new StringBuilder().append(baseUri)
-        .append("/projects/").append(project).append("/topics");
-    if (pageToken != null) {
-      uri.append("?pageToken=").append(pageToken);
-    }
-    return get("list topics", uri.toString(), TopicList.class);
+    final String query = (pageToken == null) ? "" : "?pageToken=" + pageToken;
+    final String path = "projects/" + project + "/topics" + query;
+    return get("list topics", path, TopicList.class);
   }
 
   /**
@@ -250,8 +252,7 @@ public class Pubsub implements Closeable {
   private PubsubFuture<Topic> createTopic(final String canonicalTopic,
                                           final Topic req) {
     validateCanonicalTopic(canonicalTopic);
-    final String uri = baseUri + "/" + canonicalTopic;
-    return put("create topic", uri, req, Topic.class);
+    return put("create topic", canonicalTopic, req, Topic.class);
   }
 
   /**
@@ -263,8 +264,7 @@ public class Pubsub implements Closeable {
    * if the response is 404.
    */
   public PubsubFuture<Topic> getTopic(final String project, final String topic) {
-    final String uri = baseUri + "/" + canonicalTopic(project, topic);
-    return get("get topic", uri, Topic.class);
+    return getTopic(canonicalTopic(project, topic));
   }
 
   /**
@@ -276,8 +276,7 @@ public class Pubsub implements Closeable {
    */
   public PubsubFuture<Topic> getTopic(final String canonicalTopic) {
     validateCanonicalTopic(canonicalTopic);
-    final String uri = baseUri + "/" + canonicalTopic;
-    return get("get topic", uri, Topic.class);
+    return get("get topic", canonicalTopic, Topic.class);
   }
 
   /**
@@ -302,8 +301,7 @@ public class Pubsub implements Closeable {
    */
   public PubsubFuture<Void> deleteTopic(final String canonicalTopic) {
     validateCanonicalTopic(canonicalTopic);
-    final String uri = baseUri + "/" + canonicalTopic;
-    return delete("delete topic", uri, Void.class);
+    return delete("delete topic", canonicalTopic, Void.class);
   }
 
   /**
@@ -329,55 +327,79 @@ public class Pubsub implements Closeable {
    */
   public PubsubFuture<List<String>> publish(final String project, final String topic,
                                             final List<Message> messages) {
-    final String uri = baseUri + "/projects/" + project + "/topics/" + topic + ":publish";
-    return post("publish", uri, PublishRequest.of(messages), PublishResponse.class)
+    return publish0(messages, Topic.canonicalTopic(project, topic));
+  }
+
+  /**
+   * Publish a batch of messages.
+   *
+   * @param messages       The batch of messages.
+   * @param canonicalTopic The canonical topic to publish on.
+   * @return a future that is completed with a list of message ID's for the published messages.
+   */
+  public PubsubFuture<List<String>> publish(final List<Message> messages, final String canonicalTopic) {
+    Topic.validateCanonicalTopic(canonicalTopic);
+    return publish0(messages, canonicalTopic);
+  }
+
+  /**
+   * Publish a batch of messages.
+   *
+   * @param messages       The batch of messages.
+   * @param canonicalTopic The canonical topic to publish on.
+   * @return a future that is completed with a list of message ID's for the published messages.
+   */
+  private PubsubFuture<List<String>> publish0(final List<Message> messages, final String canonicalTopic) {
+    final String path = canonicalTopic + ":publish";
+    return post("publish", path, PublishRequest.of(messages), PublishResponse.class)
         .thenApply(PublishResponse::messageIds);
   }
 
   /**
    * Make a GET request.
    */
-  private <T> PubsubFuture<T> get(final String operation, final String uri, final Class<T> responseClass) {
-    return request(operation, HttpMethod.GET, uri, responseClass);
+  private <T> PubsubFuture<T> get(final String operation, final String path, final Class<T> responseClass) {
+    return request(operation, HttpMethod.GET, path, responseClass);
   }
 
   /**
    * Make a POST request.
    */
-  private <T> PubsubFuture<T> post(final String operation, final String uri, final Object payload,
+  private <T> PubsubFuture<T> post(final String operation, final String path, final Object payload,
                                    final Class<T> responseClass) {
-    return request(operation, HttpMethod.POST, uri, responseClass, payload);
+    return request(operation, HttpMethod.POST, path, responseClass, payload);
   }
 
   /**
    * Make a PUT request.
    */
-  private <T> PubsubFuture<T> put(final String operation, final String uri, final Object payload,
+  private <T> PubsubFuture<T> put(final String operation, final String path, final Object payload,
                                   final Class<T> responseClass) {
-    return request(operation, HttpMethod.PUT, uri, responseClass, payload);
+    return request(operation, HttpMethod.PUT, path, responseClass, payload);
   }
 
   /**
    * Make a DELETE request.
    */
-  private <T> PubsubFuture<T> delete(final String operation, final String uri, final Class<T> responseClass) {
-    return request(operation, HttpMethod.DELETE, uri, responseClass);
+  private <T> PubsubFuture<T> delete(final String operation, final String path, final Class<T> responseClass) {
+    return request(operation, HttpMethod.DELETE, path, responseClass);
   }
 
   /**
    * Make an HTTP request.
    */
-  private <T> PubsubFuture<T> request(final String operation, final HttpMethod method, final String uri,
+  private <T> PubsubFuture<T> request(final String operation, final HttpMethod method, final String path,
                                       final Class<T> responseClass) {
-    return request(operation, method, uri, responseClass, NO_PAYLOAD);
+    return request(operation, method, path, responseClass, NO_PAYLOAD);
   }
 
   /**
    * Make an HTTP request.
    */
-  private <T> PubsubFuture<T> request(final String operation, final HttpMethod method, final String uri,
+  private <T> PubsubFuture<T> request(final String operation, final HttpMethod method, final String path,
                                       final Class<T> responseClass, final Object payload) {
 
+    final String uri = baseUri + path;
     final RequestBuilder builder = new RequestBuilder()
         .setUrl(uri)
         .setMethod(method.toString())
@@ -390,6 +412,7 @@ public class Pubsub implements Closeable {
       payloadSize = json.length;
       builder.setHeader(CONTENT_ENCODING, GZIP);
       builder.setHeader(CONTENT_LENGTH, String.valueOf(json.length));
+      builder.setHeader(CONTENT_TYPE, APPLICATION_JSON_UTF8);
       builder.setBody(json);
     } else {
       payloadSize = 0;
@@ -613,7 +636,7 @@ public class Pubsub implements Closeable {
     }
 
     /**
-     * Set Google Cloud API credentials to use.
+     * Set Google Cloud API credentials to use. Set to null to use application default credentials.
      *
      * @param credential the credentials used to authenticate.
      */
@@ -649,6 +672,9 @@ public class Pubsub implements Closeable {
      * @param uri the service to connect to.
      */
     public Builder uri(final URI uri) {
+      checkNotNull(uri, "uri");
+      checkArgument(uri.getRawQuery() == null, "illegal service uri: %s", uri);
+      checkArgument(uri.getRawFragment() == null, "illegal service uri: %s", uri);
       this.uri = uri;
       return this;
     }
