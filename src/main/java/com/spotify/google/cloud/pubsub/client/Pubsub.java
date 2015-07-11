@@ -91,7 +91,8 @@ public class Pubsub implements Closeable {
     log.debug("max connections: {}", config.getMaxConnections());
     log.debug("max connections per host: {}", config.getMaxConnectionsPerHost());
     log.debug("enabled cipher suites: {}", Arrays.toString(config.getEnabledCipherSuites()));
-    log.debug("compression enforced: {}", config.isCompressionEnforced());
+    log.debug("response compression enforced: {}", config.isCompressionEnforced());
+    log.debug("request compression level: {}", builder.compressionLevel);
     log.debug("accept any certificate: {}", config.isAcceptAnyCertificate());
     log.debug("follows redirect: {}", config.isFollowRedirect());
     log.debug("pooled connection TTL: {}", config.getConnectionTTL());
