@@ -20,6 +20,7 @@ import com.google.api.client.repackaged.com.google.common.base.Throwables;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.guava.GuavaModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 
 import java.io.IOException;
@@ -34,7 +35,8 @@ class Json {
   private static final ObjectMapper MAPPER = new ObjectMapper()
       .setSerializationInclusion(NON_EMPTY)
       .registerModule(new AutoMatterModule())
-      .registerModule(new Jdk8Module());
+      .registerModule(new Jdk8Module())
+      .registerModule(new GuavaModule());
 
   static <T> T read(final byte[] buffer, final Class<T> cls) throws IOException {
     return MAPPER.readValue(buffer, cls);
