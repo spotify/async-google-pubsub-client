@@ -1,7 +1,7 @@
 async-google-pubsub-client
 ==========================
 
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.spotify/async-google-pubsub-client/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.spotify/async-google-pubsub-client) [![Build Status](https://travis-ci.org/spotify/async-google-pubsub-client.svg?branch=master)](https://travis-ci.org/spotify/async-google-pubsub-client)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.spotify/async-google-pubsub-client/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.spotify/async-google-pubsub-client) [![Build Status](https://travis-ci.org/spotify/async-google-pubsub-client.svg?branch=master)](https://travis-ci.org/spotify/async-google-pubsub-client) [![codecov.io](http://codecov.io/github/spotify/async-google-pubsub-client/coverage.svg?branch=master)](http://codecov.io/github/spotify/async-google-pubsub-client?branch=master)
 
 A performant Google Pub/Sub (https://cloud.google.com/pubsub/) client.
 
