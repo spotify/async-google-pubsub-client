@@ -3,12 +3,16 @@ async-google-pubsub-client
 
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.spotify/async-google-pubsub-client/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.spotify/async-google-pubsub-client) [![Build Status](https://travis-ci.org/spotify/async-google-pubsub-client.svg?branch=master)](https://travis-ci.org/spotify/async-google-pubsub-client) [![codecov.io](http://codecov.io/github/spotify/async-google-pubsub-client/coverage.svg?branch=master)](http://codecov.io/github/spotify/async-google-pubsub-client?branch=master)
 
-A performant Google Pub/Sub (https://cloud.google.com/pubsub/) client.
+A performant [Google Cloud Pub/Sub](https://cloud.google.com/pubsub/) client and batch publisher.
 
 What
 ----
 
 A low level Pub/Sub client and a concurrent per-topic batching Publisher.
+
+The client uses async-http-client with the Netty provider for making efficient and async HTTP requests to the Google Cloud Pub/Sub api. 
+
+The publisher is implemented on top of the async Pub/Sub client and concurrently gathers individual messages into per-topic batches which are then pushed to Google Cloud Pub/Sub at a specified desired request concurrency level in order to achieve both low-latency and high throughput.
 
 Why
 ---
