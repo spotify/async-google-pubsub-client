@@ -3,6 +3,22 @@ language: java
 jdk:
   - oraclejdk8
 
+env:
+  global:
+   # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
+   #   via the "travis encrypt" command using the project repo's public key
+   - secure: "E28KLqmIiGKM1sM0r3KW6AZIfGTBf7J4+ujXBz6tSXhRbe/YAE6RshH1tu2ltMz8/BT/TI5DM8HyFpIqgrvVJwQp/r6rMSYDzFPujd8IN5IzaZFYg5THYhW46CG5fmaMgffY/U0M9jtKN3HXsi3BxVUQ+nj/g4w0cG1heSVZxtnjfJ1THOb1TXi0Fh0x7yPsYy0t9evkKkg+q0AgtsqMBgif0tlp+Z4VMmF/IzEmhyhofAMSf6dpRXXGxPWl3aNm9Cws1Qv6FxJiukWZTrViCe/tT7l390Ev7q7weXfuLIfK73pL8CxRYl6AShdFspIn+XILHwx+4pdPIeRvILYl2xBZytAlsR7O9DFDsTaI3gappIMzqVFvmL3DlWXC1osYgDLk8mOUbMkWtqJbr4JqCH+mhdIyv8Jojxxci+m71NHRrkHG0rY8tUQV9x2PHV2RMiwXJ+emFQ2eFh1EiHrp1yDF4Bh8w0SztsGqtaGoRvTmdqOBfhs+tHCd1/q0yYiJuMU2sqyEdZi1vEQ9ysDwgkUCjetlwMAURTIYhXBig0ilgHwJ4sO8651oBQu8Knu3XAu1FU+hY5ghe0WV/FQ81jDebuikNEjDktr8/xkzRNxDpPwnGwZw0ehPbtfPcXCrh+AtfG1plIUCXx5AgVlbI6RkY7s/mhl3p8vXKvecUZU="
+
+addons:
+  coverity_scan:
+    project:
+      name: "spotify/async-google-pubsub-client"
+      description: "Build submitted via Travis CI"
+    notification_email: dano@spotify.com
+    build_command_prepend: "mvn clean"
+    build_command:   "mvn -DskipTests=true compile"
+    branch_pattern: coverity_scan
+
 install: true
 
 script: mvn clean test
