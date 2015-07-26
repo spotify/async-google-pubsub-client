@@ -16,6 +16,8 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
+import com.google.common.util.concurrent.MoreExecutors;
+
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,13 +27,26 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.unmodifiableList;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  * A tool for publishing larger volumes of messages to Google Pub/Sub. Does concurrent per-topic batching in order to
  * provide good throughput with large volumes of messages across many different topics.
+ *
+ * <p> Messages are gathered into batches, bounded by specified batch size and maximum latency. The publisher waits up
+ * to the specified max latency before sending a batch of messages for a topic. If enough messages to fill a batch are
+ * submitted before the max latency deadline, then the batch is sent immediately.
+ *
+ * <p> This batching strategy trades publish request quota for increased publishing latency as outgoing messages might
+ * spend more time waiting in the publisher per-topic queues before getting sent. The rationale for this strategy is to
+ * avoid (expensive and empirically observed) excessive numbers of very small batch publish requests during off-peak.
  */
 public class Publisher implements Closeable {
 
@@ -105,7 +120,9 @@ public class Publisher implements Closeable {
   private final int queueSize;
   private final int batchSize;
   private final int concurrency;
+  private final long maxLatencyMs;
   private final Listener listener;
+  private final ScheduledExecutorService scheduler;
 
   private final AtomicInteger outstanding = new AtomicInteger();
   private final ConcurrentLinkedQueue<TopicQueue> pendingTopics = new ConcurrentLinkedQueue<>();
@@ -118,7 +135,10 @@ public class Publisher implements Closeable {
     this.concurrency = builder.concurrency;
     this.batchSize = builder.batchSize;
     this.queueSize = Optional.ofNullable(builder.queueSize).orElseGet(() -> batchSize * 10);
+    this.maxLatencyMs = builder.maxLatencyMs;
     this.listener = builder.listener == null ? new ListenerAdapter() : builder.listener;
+    this.scheduler = Optional.ofNullable(builder.scheduler).orElseGet(
+        () -> MoreExecutors.getExitingScheduledExecutorService(new ScheduledThreadPoolExecutor(1)));
     listener.publisherCreated(this);
   }
 
@@ -143,6 +163,13 @@ public class Publisher implements Closeable {
    */
   @Override
   public void close() {
+    // TODO (dano): fail outstanding futures
+    scheduler.shutdownNow();
+    try {
+      scheduler.awaitTermination(30, SECONDS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
     pubsub.close();
     closeFuture.complete(null);
     listener.publisherClosed(Publisher.this);
@@ -207,6 +234,7 @@ public class Publisher implements Closeable {
     private final String topic;
 
     private volatile boolean pending;
+    private volatile boolean scheduled;
 
     private TopicQueue(final String topic) {
       this.topic = topic;
@@ -218,6 +246,7 @@ public class Publisher implements Closeable {
     private CompletableFuture<String> send(final Message message) {
       final CompletableFuture<String> future = new CompletableFuture<>();
 
+      // Enfore queue size limit
       int currentSize;
       int newSize;
       do {
@@ -229,21 +258,56 @@ public class Publisher implements Closeable {
         }
       } while (!size.compareAndSet(currentSize, newSize));
 
+      // Enqueue outgoing message
       queue.add(new QueuedMessage(message, future));
 
-      send();
+      // Schedule future batch sending
+      scheduleSend(newSize);
 
       return future;
     }
 
     /**
-     * Attempt to start sending this topic. If the concurrency level of the publisher has already been reached, enqueue
-     * this topic onto the pending queue for later sending.
+     * Schedule this topic for future enqueuing for batch sending. If the batch size has been reached, enqueue for
+     * sending immediately.
+     *
+     * @param queueSize The current number of enqueued messages in this topic.
      */
-    private void send() {
+    private void scheduleSend(final int queueSize) {
+
+      // Bail if this topic is already enqueued for sending.
       if (pending) {
         return;
       }
+
+      // Reached the batch size? Enqueue topic for sending immediately.
+      if (queueSize >= batchSize) {
+        enqueueSend();
+        return;
+      }
+
+      // Already scheduled this topic? Bail.
+      if (scheduled) {
+        return;
+      }
+
+      // Schedule this topic for later enqueuing, allowing more messages to gather into a larger batch.
+      try {
+        scheduled = true;
+        scheduler.schedule(this::enqueueSend, maxLatencyMs, MILLISECONDS);
+      } catch (RejectedExecutionException e) {
+        // Race with a call to close(). Bail.
+        return;
+      }
+    }
+
+    /**
+     * Enqueue this topic for batch sending. If the request concurrency level is below the limit, send immediately.
+     */
+    private void enqueueSend() {
+
+      // Clear the scheduled flag before enqueuing or sending.
+      scheduled = false;
 
       final int currentOutstanding = outstanding.get();
 
@@ -253,14 +317,14 @@ public class Publisher implements Closeable {
         return;
       }
 
-      // Enqueue as pending for later sending
+      // Enqueue as pending for sending by the earliest available concurrent request slot
       pending = true;
       pendingTopics.offer(this);
 
-      // Tell the listener that a topic became pending
+      // Tell the listener that a topic became pending for sending as early as possible.
       listener.topicPending(Publisher.this, topic, currentOutstanding, concurrency);
 
-      // Attempt to send pending to guard against losing a race while enqueueing this topic as pending.
+      // Attempt to send pending to guard against losing a race while enqueuing this topic as pending.
       sendPending();
     }
 
@@ -381,6 +445,8 @@ public class Publisher implements Closeable {
     private int batchSize = 1000;
     private int concurrency = 64;
     private Listener listener;
+    private long maxLatencyMs = 100;
+    private ScheduledExecutorService scheduler;
 
     /**
      * Set the {@link Pubsub} client to use. The client will be closed when this {@link Publisher} is closed.
@@ -426,10 +492,28 @@ public class Publisher implements Closeable {
     }
 
     /**
+     * Set the maximum latency in millis before sending an incomplete Google Cloud Pub/Sub publish batch request.
+     * Default is {@code 100 ms}.
+     */
+    public Builder maxLatencyMs(final long maxLatencyMs) {
+      this.maxLatencyMs = maxLatencyMs;
+      return this;
+    }
+
+    /**
      * Set a {@link Listener} for monitoring operations performed by the {@link Publisher}.
      */
     public Builder listener(final Listener listener) {
       this.listener = listener;
+      return this;
+    }
+
+    /**
+     * Set a {@link ScheduledExecutorService} for the publisher to use when scheduling future actions. Note: Only
+     * exposed as package-local for invasive testing purposes.
+     */
+    Builder scheduler(final ScheduledExecutorService scheduler) {
+      this.scheduler = scheduler;
       return this;
     }
 
