@@ -246,7 +246,7 @@ public class Publisher implements Closeable {
     private CompletableFuture<String> send(final Message message) {
       final CompletableFuture<String> future = new CompletableFuture<>();
 
-      // Enfore queue size limit
+      // Enforce queue size limit
       int currentSize;
       int newSize;
       do {
