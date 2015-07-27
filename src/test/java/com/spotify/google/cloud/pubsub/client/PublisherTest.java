@@ -18,6 +18,7 @@ package com.spotify.google.cloud.pubsub.client;
 
 import com.google.common.collect.ImmutableSet;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -36,8 +37,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import static com.google.common.collect.Iterables.concat;
+import static com.spotify.google.cloud.pubsub.client.AssertWithTimeout.assertThatWithin;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static java.util.concurrent.TimeUnit.DAYS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.IntStream.range;
@@ -63,10 +66,9 @@ public class PublisherTest {
 
   @Captor ArgumentCaptor<PubsubFuture<List<String>>> batchFutureCaptor;
 
-  final ConcurrentMap<String, BlockingQueue<Request>> topics = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, BlockingQueue<Request>> topics = new ConcurrentHashMap<>();
 
   private Publisher publisher;
-
 
   @Before
   public void setUp() {
@@ -77,6 +79,11 @@ public class PublisherTest {
         .pubsub(pubsub)
         .listener(listener)
         .build();
+  }
+
+  @After
+  public void tearDown() throws Exception {
+    publisher.close();
   }
 
   @Test
@@ -110,21 +117,82 @@ public class PublisherTest {
 
     // Publish a message and verify that the outstanding request counter rises to 1
     final CompletableFuture<String> f1 = publisher.publish("t1", m1);
-    assertThat(publisher.outstandingRequests(), is(1));
+    assertThatWithin(5, SECONDS, publisher::outstandingRequests, is(1));
 
     // Publish another message and verify that the outstanding request counter rises to 2
     final CompletableFuture<String> f2 = publisher.publish("t2", m2);
-    assertThat(publisher.outstandingRequests(), is(2));
+    assertThatWithin(5, SECONDS, publisher::outstandingRequests, is(2));
 
     // Respond to the first request and verify that the outstanding request counter falls to 1
     t1.take().future.succeed(singletonList("id1"));
-    f1.get();
-    assertThat(publisher.outstandingRequests(), is(1));
+    assertThatWithin(5, SECONDS, publisher::outstandingRequests, is(1));
 
     // Respond to the second request and verify that the outstanding request counter falls to 0
     t2.take().future.succeed(singletonList("id2"));
-    f2.get();
-    assertThat(publisher.outstandingRequests(), is(0));
+    assertThatWithin(5, SECONDS, publisher::outstandingRequests, is(0));
+  }
+
+  @Test
+  public void testLatencyBoundedBatchingSingleMessage() throws InterruptedException, ExecutionException {
+    final LinkedBlockingQueue<Request> t = new LinkedBlockingQueue<>();
+    topics.put("t", t);
+
+    final Message m = Message.of("1");
+
+    // Publish two messages
+    publisher.publish("t", m);
+
+    // Check that the publisher eventually times out gathering messages for the batch and sends the single message.
+    final Request request = t.take();
+    assertThat(request.messages.size(), is(1));
+  }
+
+  @Test
+  public void testLatencyBoundedBatchingTwoMessages() throws InterruptedException, ExecutionException {
+    final LinkedBlockingQueue<Request> t = new LinkedBlockingQueue<>();
+    topics.put("t", t);
+
+    final Message m1 = Message.of("1");
+    final Message m2 = Message.of("2");
+
+    // Publish two messages
+    publisher.publish("t", m1);
+    publisher.publish("t", m2);
+
+    // Check that the publisher eventually times out gathering messages for the batch and sends just the two messages.
+    final Request request = t.take();
+    assertThat(request.messages.size(), is(2));
+  }
+
+  @Test
+  public void testSizeBoundedBatching() throws InterruptedException, ExecutionException {
+    final LinkedBlockingQueue<Request> t = new LinkedBlockingQueue<>();
+    topics.put("t", t);
+
+    publisher = Publisher.builder()
+        .project("test")
+        .pubsub(pubsub)
+        .batchSize(2)
+        .maxLatencyMs(DAYS.toMillis(1))
+        .build();
+
+    final Message m1 = Message.of("1");
+    final Message m2 = Message.of("2");
+
+    // Publish a single message
+    publisher.publish("t", m1);
+
+    // Verify that the batch is not sent
+    Thread.sleep(1000);
+    verify(pubsub, never()).publish(anyString(), anyString(), anyListOf(Message.class));
+
+    // Send one more message, completing the batch.
+    publisher.publish("t", m2);
+
+    // Check that the batch got sent.
+    verify(pubsub, timeout(5000)).publish(anyString(), anyString(), anyListOf(Message.class));
+    final Request request = t.take();
+    assertThat(request.messages.size(), is(2));
   }
 
   @Test
@@ -139,6 +207,7 @@ public class PublisherTest {
         .pubsub(pubsub)
         .listener(listener)
         .concurrency(1)
+        .maxLatencyMs(1)
         .build();
 
     final Message m1 = Message.of("1");
@@ -154,12 +223,11 @@ public class PublisherTest {
 
     // Publish a message on a different topic and verify that the pending topics counter rises to 1
     publisher.publish("t2", m2);
-    assertThat(publisher.pendingTopics(), is(1));
+    assertThatWithin(5, SECONDS, publisher::pendingTopics, is(1));
 
     // Respond to the first request and verify that the pending topics falls to 0
     t1.take().future.succeed(singletonList("id1"));
-    f1.get();
-    assertThat(publisher.pendingTopics(), is(0));
+    assertThatWithin(5, SECONDS, publisher::pendingTopics, is(0));
   }
 
   @Test
@@ -183,20 +251,20 @@ public class PublisherTest {
     final Message m2b = Message.of("2b");
 
     // Verify that the listener got called when the publisher was created
-    verify(listener).publisherCreated(publisher);
+    verify(listener, timeout(5000)).publisherCreated(publisher);
 
     // Publish a message and verify that the listener got called
     final CompletableFuture<String> f1 = publisher.publish("t1", m1);
-    verify(listener).publishingMessage(publisher, "t1", m1, f1);
-    verify(listener, timeout(1000)).sendingBatch(
+    verify(listener, timeout(5000)).publishingMessage(publisher, "t1", m1, f1);
+    verify(listener, timeout(5000)).sendingBatch(
         eq(publisher), eq("t1"), eq(singletonList(m1)), batchFutureCaptor.capture());
 
     // Publish two messages on a different topic and verify that the listener got told that the topic is pending
     final CompletableFuture<String> f2a = publisher.publish("t2", m2a);
     final CompletableFuture<String> f2b = publisher.publish("t2", m2b);
-    verify(listener).publishingMessage(publisher, "t2", m2a, f2a);
-    verify(listener).publishingMessage(publisher, "t2", m2b, f2b);
-    verify(listener).topicPending(publisher, "t2", 1, 1);
+    verify(listener, timeout(5000)).publishingMessage(publisher, "t2", m2a, f2a);
+    verify(listener, timeout(5000)).publishingMessage(publisher, "t2", m2b, f2b);
+    verify(listener, timeout(5000)).topicPending(publisher, "t2", 1, 1);
 
     // Respond to the first request and verify that the batch future is completed
     t1.take().future.succeed(singletonList("id1"));
@@ -204,7 +272,7 @@ public class PublisherTest {
     assertThat(batchIds1, contains("id1"));
 
     // verify that the listener got called for the second batch
-    verify(listener, timeout(1000)).sendingBatch(
+    verify(listener, timeout(5000)).sendingBatch(
         eq(publisher), eq("t2"), eq(asList(m2a, m2b)), batchFutureCaptor.capture());
 
     // Respond to the second requests and verify that the batch future is completed
@@ -214,8 +282,7 @@ public class PublisherTest {
 
     // Close the publisher and verify that the listener got called
     publisher.close();
-    publisher.closeFuture().get();
-    verify(listener).publisherClosed(publisher);
+    verify(listener, timeout(5000)).publisherClosed(publisher);
   }
 
   @Test
