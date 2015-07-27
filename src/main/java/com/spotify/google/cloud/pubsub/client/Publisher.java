@@ -30,6 +30,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.unmodifiableList;
@@ -233,7 +234,7 @@ public class Publisher implements Closeable {
     private final String topic;
 
     private volatile boolean pending;
-    private volatile boolean scheduled;
+    private final AtomicBoolean scheduled = new AtomicBoolean();
 
     private TopicQueue(final String topic) {
       this.topic = topic;
@@ -285,18 +286,13 @@ public class Publisher implements Closeable {
         return;
       }
 
-      // Already scheduled this topic? Bail.
-      if (scheduled) {
-        return;
-      }
-
       // Schedule this topic for later enqueuing, allowing more messages to gather into a larger batch.
-      try {
-        scheduled = true;
-        scheduler.schedule(this::enqueueSend, maxLatencyMs, MILLISECONDS);
-      } catch (RejectedExecutionException e) {
-        // Race with a call to close(). Bail.
-        return;
+      if (scheduled.compareAndSet(false, true)) {
+        try {
+          scheduler.schedule(this::enqueueSend, maxLatencyMs, MILLISECONDS);
+        } catch (RejectedExecutionException ignore) {
+          // Race with a call to close(). Ignore.
+        }
       }
     }
 
@@ -306,7 +302,7 @@ public class Publisher implements Closeable {
     private void enqueueSend() {
 
       // Clear the scheduled flag before enqueuing or sending.
-      scheduled = false;
+      scheduled.set(false);
 
       final int currentOutstanding = outstanding.get();
 
