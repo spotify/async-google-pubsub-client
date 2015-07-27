@@ -592,7 +592,7 @@ public class Pubsub implements Closeable {
     }
 
     /**
-     * Set the maximum number of connections client will open.
+     * Set the maximum number of connections client will open. Default is unlimited (-1).
      *
      * @param maxConnections the maximum number of connections.
      * @return this config builder.
