@@ -122,12 +122,13 @@ public class Publisher implements Closeable {
   private final int concurrency;
   private final long maxLatencyMs;
   private final Listener listener;
-  private final ScheduledExecutorService scheduler;
 
   private final AtomicInteger outstanding = new AtomicInteger();
   private final ConcurrentLinkedQueue<TopicQueue> pendingTopics = new ConcurrentLinkedQueue<>();
   private final ConcurrentMap<String, TopicQueue> topics = new ConcurrentHashMap<>();
   private final CompletableFuture<Void> closeFuture = new CompletableFuture<>();
+  private final ScheduledExecutorService scheduler =
+      MoreExecutors.getExitingScheduledExecutorService(new ScheduledThreadPoolExecutor(1));
 
   private Publisher(final Builder builder) {
     this.pubsub = Objects.requireNonNull(builder.pubsub, "pubsub");
@@ -137,8 +138,6 @@ public class Publisher implements Closeable {
     this.queueSize = Optional.ofNullable(builder.queueSize).orElseGet(() -> batchSize * 10);
     this.maxLatencyMs = builder.maxLatencyMs;
     this.listener = builder.listener == null ? new ListenerAdapter() : builder.listener;
-    this.scheduler = Optional.ofNullable(builder.scheduler).orElseGet(
-        () -> MoreExecutors.getExitingScheduledExecutorService(new ScheduledThreadPoolExecutor(1)));
     listener.publisherCreated(this);
   }
 
@@ -446,7 +445,6 @@ public class Publisher implements Closeable {
     private int concurrency = 64;
     private Listener listener;
     private long maxLatencyMs = 100;
-    private ScheduledExecutorService scheduler;
 
     /**
      * Set the {@link Pubsub} client to use. The client will be closed when this {@link Publisher} is closed.
@@ -505,15 +503,6 @@ public class Publisher implements Closeable {
      */
     public Builder listener(final Listener listener) {
       this.listener = listener;
-      return this;
-    }
-
-    /**
-     * Set a {@link ScheduledExecutorService} for the publisher to use when scheduling future actions. Note: Only
-     * exposed as package-local for invasive testing purposes.
-     */
-    Builder scheduler(final ScheduledExecutorService scheduler) {
-      this.scheduler = scheduler;
       return this;
     }
 
