@@ -27,7 +27,6 @@ public class PublisherExample {
 
   public static void main(String[] args) throws ExecutionException, InterruptedException {
     final Pubsub pubsub = Pubsub.builder()
-        .maxConnections(256)
         .build();
 
     final Publisher publisher = Publisher.builder()

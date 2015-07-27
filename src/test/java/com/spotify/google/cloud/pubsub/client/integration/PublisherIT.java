@@ -51,7 +51,6 @@ public class PublisherIT {
   @Before
   public void setUp() throws ExecutionException, InterruptedException {
     pubsub = Pubsub.builder()
-        .maxConnections(20)
         .build();
     publisher = Publisher.builder()
         .concurrency(20)

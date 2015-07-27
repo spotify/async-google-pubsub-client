@@ -64,7 +64,6 @@ public class PublisherBenchmark {
 
     final Pubsub pubsub = Pubsub.builder()
         .credential(credential)
-        .maxConnections(256)
         .compressionLevel(Deflater.BEST_SPEED)
         .enabledCipherSuites(nonGcmCiphers())
         .build();
