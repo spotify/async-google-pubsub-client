@@ -141,7 +141,7 @@ public class Pubsub implements Closeable {
 
   private Credential scoped(final GoogleCredential credential) {
     if (credential.createScopedRequired()) {
-      credential.createScoped(SCOPES);
+      return credential.createScoped(SCOPES);
     }
     return credential;
   }
