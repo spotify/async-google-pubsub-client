@@ -183,7 +183,7 @@ public class PubsubIT {
 
     final String[] defaultCiphers = SSLContext.getDefault().getDefaultSSLParameters().getCipherSuites();
     final List<String> nonGcmCiphers = Stream.of(defaultCiphers)
-        .filter(cipher -> cipher.contains("GCM"))
+        .filter(cipher -> !cipher.contains("GCM"))
         .collect(Collectors.toList());
 
     pubsub = Pubsub.builder()
