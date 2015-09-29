@@ -90,28 +90,68 @@ Publisher Benchmark
 Note: This benchmark uses a lot of quota and network bandwidth.
 
 ```
-$ mvn exec:java -Dexec.mainClass="com.spotify.google.cloud.pubsub.client.integration.PublisherBenchmark" -Dexec.classpathScope="test"
+$ mvn exec:exec -Dexec.executable="java" -Dexec.classpathScope="test" -Dexec.args="-cp %classpath com.spotify.google.cloud.pubsub.client.integration.PublisherBenchmark"
 [INFO] Scanning for projects...
-[INFO] ------------------------------------------------------------------------
-[INFO] Detecting the operating system and CPU architecture
-[INFO] ------------------------------------------------------------------------
-[INFO] os.detected.name: osx
-[INFO] os.detected.arch: x86_64
-[INFO] os.detected.classifier: osx-x86_64
+[INFO] Inspecting build with total of 1 modules...
+[INFO] Installing Nexus Staging features:
+[INFO]   ... total of 1 executions of maven-deploy-plugin replaced with nexus-staging-maven-plugin
 [INFO]
 [INFO] ------------------------------------------------------------------------
-[INFO] Building async-google-pubsub-client 1.0-SNAPSHOT
+[INFO] Building async-google-pubsub-client 1.13-SNAPSHOT
 [INFO] ------------------------------------------------------------------------
 [INFO]
-[INFO] --- exec-maven-plugin:1.4.0:java (default-cli) @ async-google-pubsub-client ---
-   1s:          180 messages/s.       615.707 ms avg latency.    (total:          181)
-   2s:       83,114 messages/s.     1,479.015 ms avg latency.    (total:       83,298)
-   3s:      101,300 messages/s.     1,073.953 ms avg latency.    (total:      184,748)
-   4s:      108,856 messages/s.       940.549 ms avg latency.    (total:      293,575)
-   5s:      102,275 messages/s.       924.469 ms avg latency.    (total:      396,049)
-   6s:      106,333 messages/s.       952.024 ms avg latency.    (total:      502,353)
-   7s:      113,751 messages/s.       905.039 ms avg latency.    (total:      615,845)
-   8s:      110,656 messages/s.       887.875 ms avg latency.    (total:      726,924)
+[INFO] --- exec-maven-plugin:1.4.0:exec (default-cli) @ async-google-pubsub-client ---
+2015-09-29 18:31:44 (1 s)
+----------------------------------------------------------------------------------------------------------------
+publishes         1,235 (    1,235 avg) messages/s      934.888 (     934.888 avg) ms latency        1,237 total
+
+... warmup ...
+
+2015-09-29 18:31:53 (10 s)
+----------------------------------------------------------------------------------------------------------------
+publishes       198,902 (  156,137 avg) messages/s      503.912 (     620.260 avg) ms latency    1,565,391 total
+
+2015-09-29 18:31:54 (11 s)
+----------------------------------------------------------------------------------------------------------------
+publishes       212,755 (  177,264 avg) messages/s      475.023 (     602.638 avg) ms latency    1,778,331 total
+
+...
+```
+
+End To End Benchmark
+-------------------
+
+Note: This benchmark uses a lot of quota and network bandwidth.
+
+```
+$ mvn exec:exec -Dexec.executable="java" -Dexec.classpathScope="test" -Dexec.args="-cp %classpath com.spotify.google.cloud.pubsub.client.integration.EndToEndBenchmark"
+[INFO] Scanning for projects...
+[INFO] Inspecting build with total of 1 modules...
+[INFO] Installing Nexus Staging features:
+[INFO]   ... total of 1 executions of maven-deploy-plugin replaced with nexus-staging-maven-plugin
+[INFO]
+[INFO] ------------------------------------------------------------------------
+[INFO] Building async-google-pubsub-client 1.13-SNAPSHOT
+[INFO] ------------------------------------------------------------------------
+[INFO]
+[INFO] --- exec-maven-plugin:1.4.0:exec (default-cli) @ async-google-pubsub-client ---
+2015-09-29 18:29:12 (1 s)
+----------------------------------------------------------------------------------------------------------------
+publishes        15,230 (   15,230 avg) messages/s      650.532 (     650.532 avg) ms latency       15,224 total
+ receives             0 (        0 avg) messages/s        0.000 (       0.000 avg) ms latency            0 total
+
+... warmup ...
+
+2015-09-29 18:29:27 (16 s)
+----------------------------------------------------------------------------------------------------------------
+publishes        85,455 (   79,706 avg) messages/s      588.480 (     659.066 avg) ms latency      980,385 total
+ receives        78,382 (   81,186 avg) messages/s    1,112.738 (   1,319.294 avg) ms latency      939,036 total
+
+2015-09-29 18:29:28 (17 s)
+----------------------------------------------------------------------------------------------------------------
+publishes       107,998 (   84,596 avg) messages/s      597.299 (     645.375 avg) ms latency    1,088,490 total
+ receives       103,196 (   83,902 avg) messages/s    1,071.667 (   1,212.498 avg) ms latency    1,042,383 total
+...
 ```
 
 
