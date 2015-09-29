@@ -19,20 +19,21 @@ package com.spotify.google.cloud.pubsub.client.integration;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.repackaged.com.google.common.base.Throwables;
 import com.google.api.services.pubsub.PubsubScopes;
-import com.google.common.util.concurrent.Futures;
 
 import com.spotify.google.cloud.pubsub.client.Message;
 import com.spotify.google.cloud.pubsub.client.Publisher;
 import com.spotify.google.cloud.pubsub.client.Pubsub;
+import com.spotify.google.cloud.pubsub.client.ReceivedMessage;
 import com.spotify.logging.LoggingConfigurator;
 
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.zip.Deflater;
@@ -42,11 +43,14 @@ import javax.net.ssl.SSLContext;
 import static com.spotify.logging.LoggingConfigurator.Level.WARN;
 import static java.util.stream.Collectors.toList;
 
-public class PublisherBenchmark {
+public class EndToEndBenchmark {
+
+  private static final int PUBLISHER_CONCURRENCY = 128;
+  private static final int PULLER_CONCURRENCY = 128;
 
   private static final int MESSAGE_SIZE = 512;
 
-  public static void main(final String... args) throws IOException {
+  public static void main(final String... args) throws IOException, ExecutionException, InterruptedException {
 
     final String project = Util.defaultProject();
 
@@ -70,53 +74,51 @@ public class PublisherBenchmark {
 
     final Publisher publisher = Publisher.builder()
         .pubsub(pubsub)
-        .concurrency(128)
+        .concurrency(PUBLISHER_CONCURRENCY)
         .project(project)
         .build();
 
     LoggingConfigurator.configureDefaults("benchmark", WARN);
 
-    final String topicPrefix = "test-topic-" + ThreadLocalRandom.current().nextInt();
+    final String topic = "test-" + Long.toHexString(ThreadLocalRandom.current().nextLong());
+    final String subscription = "test-" + Long.toHexString(ThreadLocalRandom.current().nextLong());
 
-    final List<String> topics = IntStream.range(0, 100)
-        .mapToObj(i -> topicPrefix + "-" + i)
-        .collect(toList());
+    pubsub.createTopic(project, topic).get();
+    pubsub.createSubscription(project, subscription, topic).get();
 
-    topics.stream()
-        .map(topic -> pubsub.createTopic(project, topic))
-        .collect(toList())
-        .forEach(Futures::getUnchecked);
-
-    final List<Message> messages = IntStream.range(0, 1000)
+    final List<String> payloads = IntStream.range(0, 1024)
         .mapToObj(i -> {
           final StringBuilder s = new StringBuilder();
           while (s.length() < MESSAGE_SIZE) {
             s.append(ThreadLocalRandom.current().nextInt());
           }
-          return Message.ofEncoded(s.toString());
+          return Message.encode(s.toString());
         })
         .collect(toList());
+    final int payloadIxMask = 1024 - 1;
+
+    final Supplier<Message> generator = () -> Message.builder()
+        .data(payloads.get(ThreadLocalRandom.current().nextInt() & payloadIxMask))
+        .putAttribute("ts", Long.toHexString(System.nanoTime()))
+        .build();
 
     final ProgressMeter meter = new ProgressMeter();
-    final ProgressMeter.Metric requests = meter.group("operations").metric("publishes", "messages");
+    final ProgressMeter.Metric publishes = meter.group("operations").metric("publishes", "messages");
+    final ProgressMeter.Metric receives = meter.group("operations").metric("receives", "messages");
 
     for (int i = 0; i < 100000; i++) {
-      benchSend(publisher, messages, topics, requests);
+      publish(publisher, generator, topic, publishes);
+    }
+
+    // Pull concurrently and (asynchronously) publish a new message for every message received
+    for (int i = 0; i < PULLER_CONCURRENCY; i++) {
+      pull(project, pubsub, subscription, receives, () -> publish(publisher, generator, topic, publishes));
     }
   }
 
-  private static byte[] utf8(final String s) {
-    try {
-      return s.getBytes("UTF-8");
-    } catch (UnsupportedEncodingException e) {
-      throw Throwables.propagate(e);
-    }
-  }
-
-  private static void benchSend(final Publisher publisher, final List<Message> messages,
-                                final List<String> topics, final ProgressMeter.Metric requests) {
-    final String topic = topics.get(ThreadLocalRandom.current().nextInt(topics.size()));
-    final Message message = messages.get(ThreadLocalRandom.current().nextInt(messages.size()));
+  private static void publish(final Publisher publisher, final Supplier<Message> generator,
+                              final String topic, final ProgressMeter.Metric publishes) {
+    final Message message = generator.get();
     final CompletableFuture<String> future = publisher.publish(topic, message);
     final long start = System.nanoTime();
     future.whenComplete((s, ex) -> {
@@ -126,9 +128,34 @@ public class PublisherBenchmark {
       }
       final long end = System.nanoTime();
       final long latency = end - start;
-      requests.inc(latency);
-      benchSend(publisher, messages, topics, requests);
+      publishes.inc(latency);
     });
+  }
+
+  private static void pull(final String project, final Pubsub pubsub, final String subscription,
+                           final ProgressMeter.Metric receives, final Runnable callback) {
+    pubsub.pull(project, subscription, false, 1000)
+        .whenComplete((messages, ex) -> {
+          if (ex != null) {
+            ex.printStackTrace();
+            return;
+          }
+          // Immediately kick off another pull
+          pull(project, pubsub, subscription, receives, callback);
+
+          // Ack received messages
+          final String[] ackIds = messages.stream().map(ReceivedMessage::ackId).toArray(String[]::new);
+          pubsub.acknowledge(project, subscription, ackIds);
+
+          // Account for and call callback for each received message
+          for (final ReceivedMessage message : messages) {
+            final String tsHex = message.message().attributes().get("ts");
+            final long tsNanos = Long.valueOf(tsHex, 16);
+            final long latencyNanos = System.nanoTime() - tsNanos;
+            receives.inc(latencyNanos);
+            callback.run();
+          }
+        });
   }
 
   /**
