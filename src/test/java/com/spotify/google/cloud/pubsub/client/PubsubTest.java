@@ -157,11 +157,11 @@ public class PubsubTest {
 
   @Test
   public void testGetTopic() throws Exception {
-    final PubsubFuture<TopicList> future = pubsub.listTopics(PROJECT);
+    final PubsubFuture<Topic> future = pubsub.getTopic(PROJECT, TOPIC_1);
 
-    final String expectedPath = BASE_PATH + "projects/" + PROJECT + "/topics";
+    final String expectedPath = BASE_PATH + "projects/" + PROJECT + "/topics/" + TOPIC_1;
 
-    assertThat(future.operation(), is("list topics"));
+    assertThat(future.operation(), is("get topic"));
     assertThat(future.method(), is("GET"));
     assertThat(future.uri(), is(server.getUrl(expectedPath).toString()));
     assertThat(future.payloadSize(), is(0L));
@@ -172,11 +172,11 @@ public class PubsubTest {
     assertThat(request.getPath(), is(expectedPath));
     assertRequestHeaders(request);
 
-    final TopicList response = TopicList.of(Topic.of(PROJECT, TOPIC_1), Topic.of(PROJECT, TOPIC_2));
+    final Topic response = Topic.of(PROJECT, TOPIC_1);
     server.enqueue(new MockResponse().setBody(json(response)));
 
-    final TopicList topicList = future.get(10, SECONDS);
-    assertThat(topicList, is(response));
+    final Topic topic = future.get(10, SECONDS);
+    assertThat(topic, is(response));
   }
 
   @Test
