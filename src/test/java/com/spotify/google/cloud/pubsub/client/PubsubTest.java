@@ -119,13 +119,6 @@ public class PubsubTest {
     assertThat(topicList, is(response));
   }
 
-  public void assertRequestHeaders(final RecordedRequest request) {
-    assertThat(request.getHeader(USER_AGENT), is("Spotify-Google-Pubsub-Java-Client/1.0.0 (gzip)"));
-    assertThat(request.getHeader(AUTHORIZATION), is("Bearer " + ACCESS_TOKEN));
-    assertThat(request.getHeader(ACCEPT_ENCODING), is("gzip,deflate"));
-    assertThat(request.getHeader(CONNECTION), is("keep-alive"));
-  }
-
   @Test
   public void testListTopicsWithPageToken() throws Exception {
     final String pageToken = "foo";
@@ -306,6 +299,13 @@ public class PubsubTest {
     final CompletableFuture<List<String>> f2 = pubsub.publish("test", "t2", m2);
     final List<String> ids2 = f2.get();
     assertThat(ids2, contains("id2"));
+  }
+
+  private void assertRequestHeaders(final RecordedRequest request) {
+    assertThat(request.getHeader(USER_AGENT), is("Spotify-Google-Pubsub-Java-Client/1.0.0 (gzip)"));
+    assertThat(request.getHeader(AUTHORIZATION), is("Bearer " + ACCESS_TOKEN));
+    assertThat(request.getHeader(ACCEPT_ENCODING), is("gzip,deflate"));
+    assertThat(request.getHeader(CONNECTION), is("keep-alive"));
   }
 
   private static Buffer json(final Object o) {
