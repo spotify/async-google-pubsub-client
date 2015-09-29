@@ -18,10 +18,12 @@ package com.spotify.google.cloud.pubsub.client.example;
 
 import com.spotify.google.cloud.pubsub.client.Message;
 import com.spotify.google.cloud.pubsub.client.Pubsub;
+import com.spotify.google.cloud.pubsub.client.ReceivedMessage;
 
 import java.io.UnsupportedEncodingException;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import static com.spotify.google.cloud.pubsub.client.Message.encode;
 import static java.util.Arrays.asList;
@@ -33,6 +35,9 @@ public class PubsubExample {
 
     // Create a topic
     pubsub.createTopic("my-google-cloud-project", "the-topic").get();
+
+    // Create a subscription
+    pubsub.createSubscription("my-google-cloud-project", "the-subscription-name", "the-topic").get();
 
     // Create a batch of messages
     final List<Message> messages = asList(
@@ -47,7 +52,14 @@ public class PubsubExample {
 
     // Publish the messages
     final List<String> messageIds = pubsub.publish("my-google-cloud-project", "the-topic", messages).get();
-
     System.out.println("Message IDs: " + messageIds);
+
+    // Pull the message
+    final List<ReceivedMessage> received = pubsub.pull("my-google-cloud-project", "the-subscription").get();
+    System.out.println("Received Messages: " + received);
+
+    // Ack the received messages
+    final List<String> ackIds = received.stream().map(ReceivedMessage::ackId).collect(Collectors.toList());
+    pubsub.acknowledge("my-google-cloud-project", "the-subscription", ackIds).get();
   }
 }

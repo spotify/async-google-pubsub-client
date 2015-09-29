@@ -27,6 +27,10 @@ Usage
 // Create a topic
 pubsub.createTopic("my-google-cloud-project", "the-topic").get();
 
+// Create a subscription
+pubsub.createSubscription("my-google-cloud-project", "the-subscription-name", "the-topic").get();
+
+// Create a batch of messages
 final List<Message> messages = asList(
     Message.builder()
         .attributes("type", "foo")
@@ -39,8 +43,15 @@ final List<Message> messages = asList(
 
 // Publish the messages
 final List<String> messageIds = pubsub.publish("my-google-cloud-project", "the-topic", messages).get();
-
 System.out.println("Message IDs: " + messageIds);
+
+// Pull the message
+final List<ReceivedMessage> received = pubsub.pull("my-google-cloud-project", "the-subscription").get();
+System.out.println("Received Messages: " + received);
+
+// Ack the received messages
+final List<String> ackIds = received.stream().map(ReceivedMessage::ackId).collect(Collectors.toList());
+pubsub.acknowledge("my-google-cloud-project", "the-subscription", ackIds).get();
 ```
 
 ### Publisher
@@ -149,5 +160,5 @@ Have your GnuPG password ready. Both prepare and perform steps will ask you for 
 
 Todo
 ----
-* Implement a consumer
+* Implement a high level consumer (raw pull/ack support is there)
 * Implement retries on auth failure
