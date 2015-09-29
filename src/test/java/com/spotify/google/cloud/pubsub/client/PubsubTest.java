@@ -457,9 +457,45 @@ public class PubsubTest {
       throws InterruptedException, ExecutionException, TimeoutException {
     final PubsubFuture<Void> future = pubsub.acknowledge(PROJECT, SUBSCRIPTION_1, ackIds);
 
-    final String expectedPath = BASE_PATH + Subscription.canonicalSubscription(PROJECT, SUBSCRIPTION_1) + ":acknowledge";
+    final String expectedPath =
+        BASE_PATH + Subscription.canonicalSubscription(PROJECT, SUBSCRIPTION_1) + ":acknowledge";
 
     assertThat(future.operation(), is("acknowledge"));
+    assertThat(future.method(), is("POST"));
+    assertThat(future.uri(), is(server.getUrl(expectedPath).toString()));
+    assertThat(future.payloadSize(), is(greaterThan(0L)));
+
+    final RecordedRequest request = server.takeRequest(10, SECONDS);
+
+    assertThat(request.getMethod(), is("POST"));
+    assertThat(request.getPath(), is(expectedPath));
+    assertThat(request.getHeader(CONTENT_ENCODING), is("gzip"));
+    assertThat(request.getHeader(CONTENT_LENGTH), is(String.valueOf(future.payloadSize())));
+    assertThat(request.getHeader(CONTENT_TYPE), is("application/json; charset=UTF-8"));
+
+    assertRequestHeaders(request);
+
+    server.enqueue(new MockResponse());
+    future.get(10, SECONDS);
+  }
+
+  @Test
+  public void testModifyAckDeadlineSingle() throws Exception {
+    testModifyAckDeadline(17, "a0");
+  }
+
+  @Test
+  public void testModifyAckDeadlineBatch() throws Exception {
+    testModifyAckDeadline(17, "a0", "a1", "a2");
+  }
+
+  private void testModifyAckDeadline(final int ackDeadlineSeconds, final String... ackIds) throws Exception {
+    final PubsubFuture<Void> future = pubsub.modifyAckDeadline(PROJECT, SUBSCRIPTION_1, ackDeadlineSeconds, ackIds);
+
+    final String expectedPath =
+        BASE_PATH + Subscription.canonicalSubscription(PROJECT, SUBSCRIPTION_1) + ":modifyAckDeadline";
+
+    assertThat(future.operation(), is("modify ack deadline"));
     assertThat(future.method(), is("POST"));
     assertThat(future.uri(), is(server.getUrl(expectedPath).toString()));
     assertThat(future.payloadSize(), is(greaterThan(0L)));

@@ -499,10 +499,10 @@ public class Pubsub implements Closeable {
   /**
    * Pull a batch of messages.
    *
-   * @param project      The Google Cloud project.
-   * @param subscription The subscription to pull from.
-   * @param returnImmediately         {@code true} to return immediately if the queue is empty. {@code false} to wait
-   *                                  for at least one message before returning.
+   * @param project           The Google Cloud project.
+   * @param subscription      The subscription to pull from.
+   * @param returnImmediately {@code true} to return immediately if the queue is empty. {@code false} to wait for at
+   *                          least one message before returning.
    * @return a future that is completed with a list of received messages.
    */
   public PubsubFuture<List<ReceivedMessage>> pull(final String project, final String subscription,
@@ -513,11 +513,11 @@ public class Pubsub implements Closeable {
   /**
    * Pull a batch of messages.
    *
-   * @param project      The Google Cloud project.
-   * @param subscription The subscription to pull from.
-   * @param returnImmediately         {@code true} to return immediately if the queue is empty. {@code false} to wait
-   *                                  for at least one message before returning.
-   * @param maxMessages               Maximum number of messages to return in batch.
+   * @param project           The Google Cloud project.
+   * @param subscription      The subscription to pull from.
+   * @param returnImmediately {@code true} to return immediately if the queue is empty. {@code false} to wait for at
+   *                          least one message before returning.
+   * @param maxMessages       Maximum number of messages to return in batch.
    * @return a future that is completed with a list of received messages.
    */
   public PubsubFuture<List<ReceivedMessage>> pull(final String project, final String subscription,
@@ -615,6 +615,53 @@ public class Pubsub implements Closeable {
         .ackIds(ackIds)
         .build();
     return post("acknowledge", path, req, Void.class);
+  }
+
+  /**
+   * Modify the ack deadline for a list of received messages.
+   *
+   * @param project            The Google Cloud project.
+   * @param subscription       The subscription of the received message to modify the ack deadline on.
+   * @param ackDeadlineSeconds The new ack deadline.
+   * @param ackIds             List of message ID's to modify the ack deadline on.
+   * @return A future that is completed when this request is completed.
+   */
+  public PubsubFuture<Void> modifyAckDeadline(final String project, final String subscription,
+                                              final int ackDeadlineSeconds, final String... ackIds) {
+    return modifyAckDeadline(project, subscription, ackDeadlineSeconds, asList(ackIds));
+  }
+
+  /**
+   * Modify the ack deadline for a list of received messages.
+   *
+   * @param project            The Google Cloud project.
+   * @param subscription       The subscription of the received message to modify the ack deadline on.
+   * @param ackDeadlineSeconds The new ack deadline.
+   * @param ackIds             List of message ID's to modify the ack deadline on.
+   * @return A future that is completed when this request is completed.
+   */
+  public PubsubFuture<Void> modifyAckDeadline(final String project, final String subscription,
+                                              final int ackDeadlineSeconds, final List<String> ackIds) {
+    return modifyAckDeadline(Subscription.canonicalSubscription(project, subscription), ackDeadlineSeconds, ackIds);
+  }
+
+  /**
+   * Modify the ack deadline for a list of received messages.
+   *
+   * @param canonicalSubscriptionName The canonical (including project name) subscription of the received message to
+   *                                  modify the ack deadline on.
+   * @param ackDeadlineSeconds        The new ack deadline.
+   * @param ackIds                    List of message ID's to modify the ack deadline on.
+   * @return A future that is completed when this request is completed.
+   */
+  public PubsubFuture<Void> modifyAckDeadline(final String canonicalSubscriptionName, final int ackDeadlineSeconds,
+                                              final List<String> ackIds) {
+    final String path = canonicalSubscriptionName + ":modifyAckDeadline";
+    final ModifyAckDeadlineRequest req = ModifyAckDeadlineRequest.builder()
+        .ackDeadlineSeconds(ackDeadlineSeconds)
+        .ackIds(ackIds)
+        .build();
+    return post("modify ack deadline", path, req, Void.class);
   }
 
   /**

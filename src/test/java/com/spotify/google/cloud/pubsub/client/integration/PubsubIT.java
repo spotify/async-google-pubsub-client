@@ -236,17 +236,27 @@ public class PubsubIT {
 
   @Test
   public void testPullSingle() throws IOException, ExecutionException, InterruptedException {
+    // Create topic and subscription
     pubsub.createTopic(PROJECT, TOPIC).get();
     pubsub.createSubscription(PROJECT, SUBSCRIPTION, TOPIC).get();
+
+    // Publish a message
     final String data = BaseEncoding.base64().encode("hello world".getBytes("UTF-8"));
     final Message message = Message.of(data);
     final List<String> ids = pubsub.publish(PROJECT, TOPIC, message).get();
     final String id = ids.get(0);
     final List<ReceivedMessage> response = pubsub.pull(PROJECT, SUBSCRIPTION, false).get();
+
+    // Verify received message
     assertThat(response.size(), is(1));
     assertThat(response.get(0).message().data(), is(data));
     assertThat(response.get(0).message().messageId().get(), is(id));
     assertThat(response.get(0).ackId(), not(isEmptyOrNullString()));
+
+    // Modify ack deadline
+    pubsub.modifyAckDeadline(PROJECT, SUBSCRIPTION, 30, response.get(0).ackId()).get();
+
+    // Ack message
     pubsub.acknowledge(PROJECT, SUBSCRIPTION, response.get(0).ackId()).get();
   }
 
@@ -284,11 +294,14 @@ public class PubsubIT {
       assertThat(receivedMessage.message().messageId().get(), is(id));
       assertThat(receivedMessage.ackId(), not(isEmptyOrNullString()));
     }
-
-    // Batch ack the messages
     final List<String> ackIds = received.values().stream()
         .map(ReceivedMessage::ackId)
         .collect(Collectors.toList());
+
+    // Batch modify ack deadline
+    pubsub.modifyAckDeadline(PROJECT, SUBSCRIPTION, 30, ackIds).get();
+
+    // Batch ack the messages
     pubsub.acknowledge(PROJECT, SUBSCRIPTION, ackIds).get();
   }
 
