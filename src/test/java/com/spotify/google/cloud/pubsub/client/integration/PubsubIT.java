@@ -56,6 +56,7 @@ import java.util.stream.Stream;
 import javax.net.ssl.SSLContext;
 
 import static com.spotify.google.cloud.pubsub.client.integration.Util.TEST_NAME_PREFIX;
+import static java.lang.Long.toHexString;
 import static java.lang.System.out;
 import static java.util.stream.Collectors.toList;
 import static java.util.zip.Deflater.BEST_SPEED;
@@ -77,8 +78,8 @@ public class PubsubIT {
 
   private static final String PROJECT = Util.defaultProject();
 
-  private static final String TOPIC = TEST_NAME_PREFIX + ThreadLocalRandom.current().nextLong();
-  private static final String SUBSCRIPTION = TEST_NAME_PREFIX + ThreadLocalRandom.current().nextLong();
+  private static final String TOPIC = TEST_NAME_PREFIX + toHexString(ThreadLocalRandom.current().nextLong());
+  private static final String SUBSCRIPTION = TEST_NAME_PREFIX + toHexString(ThreadLocalRandom.current().nextLong());
 
   private static GoogleCredential CREDENTIAL;
 
