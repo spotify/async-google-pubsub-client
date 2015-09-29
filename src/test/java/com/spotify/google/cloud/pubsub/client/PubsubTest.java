@@ -59,6 +59,8 @@ public class PubsubTest {
   public static final String PROJECT = "test-project";
   public static final String TOPIC_1 = "topic-1";
   public static final String TOPIC_2 = "topic-2";
+  public static final String SUBSCRIPTION_1 = "subscription-1";
+  public static final String SUBSCRIPTION_2 = "subscription-2";
 
   public static final String BASE_PATH = "/v1/";
 
@@ -206,6 +208,134 @@ public class PubsubTest {
     final String expectedPath = BASE_PATH + Topic.canonicalTopic(PROJECT, TOPIC_1);
 
     assertThat(future.operation(), is("delete topic"));
+    assertThat(future.method(), is("DELETE"));
+    assertThat(future.uri(), is(server.getUrl(expectedPath).toString()));
+    assertThat(future.payloadSize(), is(0L));
+
+    final RecordedRequest request = server.takeRequest(10, SECONDS);
+
+    assertThat(request.getMethod(), is("DELETE"));
+    assertThat(request.getPath(), is(expectedPath));
+    assertRequestHeaders(request);
+
+    server.enqueue(new MockResponse());
+
+    future.get(10, SECONDS);
+  }
+
+  @Test
+  public void testListSubscriptions() throws Exception {
+    final PubsubFuture<SubscriptionList> future = pubsub.listSubscriptions(PROJECT);
+
+    final String expectedPath = BASE_PATH + "projects/" + PROJECT + "/subscriptions";
+
+    assertThat(future.operation(), is("list subscriptions"));
+    assertThat(future.method(), is("GET"));
+    assertThat(future.uri(), is(server.getUrl(expectedPath).toString()));
+    assertThat(future.payloadSize(), is(0L));
+
+    final RecordedRequest request = server.takeRequest(10, SECONDS);
+
+    assertThat(request.getMethod(), is("GET"));
+    assertThat(request.getPath(), is(expectedPath));
+    assertRequestHeaders(request);
+
+    final SubscriptionList response = SubscriptionList.of(Subscription.of(PROJECT, SUBSCRIPTION_1, TOPIC_1),
+                                                          Subscription.of(PROJECT, SUBSCRIPTION_2, TOPIC_2));
+    server.enqueue(new MockResponse().setBody(json(response)));
+
+    final SubscriptionList subscriptionList = future.get(10, SECONDS);
+    assertThat(subscriptionList, is(response));
+  }
+
+  @Test
+  public void testListSubscriptionsWithPageToken() throws Exception {
+    final String pageToken = "foo";
+    final String nextPageToken = "foo";
+    final PubsubFuture<SubscriptionList> future = pubsub.listSubscriptions(PROJECT, pageToken);
+
+    final String expectedPath = BASE_PATH + "projects/" + PROJECT + "/subscriptions?pageToken=" + pageToken;
+
+    assertThat(future.operation(), is("list subscriptions"));
+    assertThat(future.method(), is("GET"));
+    assertThat(future.uri(), is(server.getUrl(expectedPath).toString()));
+    assertThat(future.payloadSize(), is(0L));
+
+    final RecordedRequest request = server.takeRequest(10, SECONDS);
+
+    assertThat(request.getMethod(), is("GET"));
+    assertThat(request.getPath(), is(expectedPath));
+    assertRequestHeaders(request);
+
+    final SubscriptionList response = SubscriptionList.builder()
+        .nextPageToken(nextPageToken)
+        .subscriptions(Subscription.of(PROJECT, SUBSCRIPTION_1, TOPIC_1),
+                       Subscription.of(PROJECT, SUBSCRIPTION_2, TOPIC_2))
+        .build();
+    server.enqueue(new MockResponse().setBody(json(response)));
+
+    final SubscriptionList subscriptionList = future.get(10, SECONDS);
+    assertThat(subscriptionList, is(response));
+  }
+
+  @Test
+  public void testGetSubscription() throws Exception {
+    final PubsubFuture<Subscription> future = pubsub.getSubscription(PROJECT, SUBSCRIPTION_1);
+
+    final String expectedPath = BASE_PATH + "projects/" + PROJECT + "/subscriptions/" + SUBSCRIPTION_1;
+
+    assertThat(future.operation(), is("get subscription"));
+    assertThat(future.method(), is("GET"));
+    assertThat(future.uri(), is(server.getUrl(expectedPath).toString()));
+    assertThat(future.payloadSize(), is(0L));
+
+    final RecordedRequest request = server.takeRequest(10, SECONDS);
+
+    assertThat(request.getMethod(), is("GET"));
+    assertThat(request.getPath(), is(expectedPath));
+    assertRequestHeaders(request);
+
+    final Subscription response = Subscription.of(PROJECT, TOPIC_1);
+    server.enqueue(new MockResponse().setBody(json(response)));
+
+    final Subscription subscription = future.get(10, SECONDS);
+    assertThat(subscription, is(response));
+  }
+
+  @Test
+  public void testCreateSubscription() throws Exception {
+    final PubsubFuture<Subscription> future = pubsub.createSubscription(PROJECT, SUBSCRIPTION_1, TOPIC_1);
+
+    final String expectedPath = BASE_PATH + Subscription.canonicalSubscription(PROJECT, SUBSCRIPTION_1);
+
+    assertThat(future.operation(), is("create subscription"));
+    assertThat(future.method(), is("PUT"));
+    assertThat(future.uri(), is(server.getUrl(expectedPath).toString()));
+    assertThat(future.payloadSize(), is(greaterThan(0L)));
+
+    final RecordedRequest request = server.takeRequest(10, SECONDS);
+
+    assertThat(request.getMethod(), is("PUT"));
+    assertThat(request.getPath(), is(expectedPath));
+    assertThat(request.getHeader(CONTENT_ENCODING), is("gzip"));
+    assertThat(request.getHeader(CONTENT_LENGTH), is(String.valueOf(future.payloadSize())));
+    assertThat(request.getHeader(CONTENT_TYPE), is("application/json; charset=UTF-8"));
+    assertRequestHeaders(request);
+
+    final Subscription response = Subscription.of(PROJECT, SUBSCRIPTION_1, TOPIC_1);
+    server.enqueue(new MockResponse().setBody(json(response)));
+
+    final Subscription subscription = future.get(10, SECONDS);
+    assertThat(subscription, is(response));
+  }
+
+  @Test
+  public void testDeleteSubscription() throws Exception {
+    final PubsubFuture<Void> future = pubsub.deleteSubscription(PROJECT, SUBSCRIPTION_1);
+
+    final String expectedPath = BASE_PATH + Subscription.canonicalSubscription(PROJECT, SUBSCRIPTION_1);
+
+    assertThat(future.operation(), is("delete subscription"));
     assertThat(future.method(), is("DELETE"));
     assertThat(future.uri(), is(server.getUrl(expectedPath).toString()));
     assertThat(future.payloadSize(), is(0L));

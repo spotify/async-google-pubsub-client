@@ -50,6 +50,8 @@ import java.util.zip.GZIPOutputStream;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.util.concurrent.MoreExecutors.getExitingScheduledExecutorService;
+import static com.spotify.google.cloud.pubsub.client.Subscription.canonicalSubscription;
+import static com.spotify.google.cloud.pubsub.client.Subscription.validateCanonicalSubscription;
 import static com.spotify.google.cloud.pubsub.client.Topic.canonicalTopic;
 import static com.spotify.google.cloud.pubsub.client.Topic.validateCanonicalTopic;
 import static java.util.Arrays.asList;
@@ -134,7 +136,7 @@ public class Pubsub implements Closeable {
 
   private Credential scoped(final Credential credential) {
     if (credential instanceof GoogleCredential) {
-      return scoped((GoogleCredential)credential);
+      return scoped((GoogleCredential) credential);
     }
     return credential;
   }
@@ -302,6 +304,131 @@ public class Pubsub implements Closeable {
   public PubsubFuture<Void> deleteTopic(final String canonicalTopic) {
     validateCanonicalTopic(canonicalTopic);
     return delete("delete topic", canonicalTopic, Void.class);
+  }
+
+  /**
+   * Create a Pub/Sub subscription.
+   *
+   * @param project          The Google Cloud project.
+   * @param subscriptionName The name of the subscription to create.
+   * @param topic            The name of the topic to subscribe to.
+   * @return A future that is completed when this request is completed.
+   */
+  public PubsubFuture<Subscription> createSubscription(final String project,
+                                                       final String subscriptionName,
+                                                       final String topic) {
+    return createSubscription(canonicalSubscription(project, subscriptionName), canonicalTopic(project, topic));
+  }
+
+  /**
+   * List the Pub/Sub subscriptions in a project. This will get the first page of subscriptions. To enumerate all
+   * subscriptions you might have to make further calls to {@link #listTopics(String, String)} with the page token in
+   * order to get further pages.
+   *
+   * @param project The Google Cloud project.
+   * @return A future that is completed when this request is completed.
+   */
+  public PubsubFuture<SubscriptionList> listSubscriptions(final String project) {
+    final String path = "projects/" + project + "/subscriptions";
+    return get("list subscriptions", path, SubscriptionList.class);
+  }
+
+  /**
+   * Get a page of Pub/Sub subscriptions in a project using a specified page token.
+   *
+   * @param project   The Google Cloud project.
+   * @param pageToken A token for the page of subscriptions to get.
+   * @return A future that is completed when this request is completed.
+   */
+  public PubsubFuture<SubscriptionList> listSubscriptions(final String project,
+                                                   final String pageToken) {
+    final String query = (pageToken == null) ? "" : "?pageToken=" + pageToken;
+    final String path = "projects/" + project + "/subscriptions" + query;
+    return get("list subscriptions", path, SubscriptionList.class);
+  }
+
+  /**
+   * Create a Pub/Sub subscription.
+   *
+   * @param canonicalSubscriptionName The canonical (including project) name of the scubscription to create.
+   * @param canonicalTopic            The canonical (including project) name of the topic to subscribe to.
+   * @return A future that is completed when this request is completed.
+   */
+  public PubsubFuture<Subscription> createSubscription(final String canonicalSubscriptionName,
+                                                       final String canonicalTopic) {
+    return createSubscription(Subscription.of(canonicalSubscriptionName, canonicalTopic));
+  }
+
+  /**
+   * Create a Pub/Sub subscription.
+   *
+   * @param subscription The subscription to create.
+   * @return A future that is completed when this request is completed.
+   */
+  private PubsubFuture<Subscription> createSubscription(final Subscription subscription) {
+    return createSubscription(subscription.name(), subscription);
+  }
+
+  /**
+   * Create a Pub/Sub subscription.
+   *
+   * @param canonicalSubscriptionName The canonical (including project) name of the subscription to create.
+   * @param subscription              The subscription to create.
+   * @return A future that is completed when this request is completed.
+   */
+  private PubsubFuture<Subscription> createSubscription(final String canonicalSubscriptionName,
+                                                        final Subscription subscription) {
+    validateCanonicalSubscription(canonicalSubscriptionName);
+    return put("create subscription", canonicalSubscriptionName, subscription, Subscription.class);
+  }
+
+  /**
+   * Get a Pub/Sub subscription.
+   *
+   * @param project      The Google Cloud project.
+   * @param subscription The name of the subscription to get.
+   * @return A future that is completed when this request is completed. The future will be completed with {@code null}
+   * if the response is 404.
+   */
+  public PubsubFuture<Subscription> getSubscription(final String project, final String subscription) {
+    return getSubscription(canonicalSubscription(project, subscription));
+  }
+
+  /**
+   * Get a Pub/Sub subscription.
+   *
+   * @param canonicalSubscriptionName The canonical (including project) name of the subscription to get.
+   * @return A future that is completed when this request is completed. The future will be completed with {@code null}
+   * if the response is 404.
+   */
+  public PubsubFuture<Subscription> getSubscription(final String canonicalSubscriptionName) {
+    validateCanonicalSubscription(canonicalSubscriptionName);
+    return get("get subscription", canonicalSubscriptionName, Subscription.class);
+  }
+
+  /**
+   * Delete a Pub/Sub subscription.
+   *
+   * @param project      The Google Cloud project.
+   * @param subscription The name of the subscription to delete.
+   * @return A future that is completed when this request is completed. The future will be completed with {@code null}
+   * if the response is 404.
+   */
+  public PubsubFuture<Void> deleteSubscription(final String project,
+                                               final String subscription) {
+    return deleteSubscription(canonicalSubscription(project, subscription));
+  }
+
+  /**
+   * Delete a Pub/Sub subscription.
+   *
+   * @param canonicalSubscriptionName The canonical (including project) name of the subscription to delete.
+   * @return A future that is completed when this request is completed. The future will be completed with {@code null}
+   * if the response is 404.
+   */
+  public PubsubFuture<Void> deleteSubscription(final String canonicalSubscriptionName) {
+    validateCanonicalSubscription(canonicalSubscriptionName);
+    return delete("delete subscription", canonicalSubscriptionName, Void.class);
   }
 
   /**

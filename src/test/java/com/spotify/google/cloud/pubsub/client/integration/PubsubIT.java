@@ -26,6 +26,8 @@ import com.spotify.google.cloud.pubsub.client.Message;
 import com.spotify.google.cloud.pubsub.client.MessageBuilder;
 import com.spotify.google.cloud.pubsub.client.Pubsub;
 import com.spotify.google.cloud.pubsub.client.PubsubFuture;
+import com.spotify.google.cloud.pubsub.client.Subscription;
+import com.spotify.google.cloud.pubsub.client.SubscriptionList;
 import com.spotify.google.cloud.pubsub.client.Topic;
 import com.spotify.google.cloud.pubsub.client.TopicList;
 
@@ -48,7 +50,7 @@ import java.util.stream.Stream;
 
 import javax.net.ssl.SSLContext;
 
-import static com.spotify.google.cloud.pubsub.client.integration.Util.TEST_TOPIC_PREFIX;
+import static com.spotify.google.cloud.pubsub.client.integration.Util.TEST_NAME_PREFIX;
 import static java.lang.System.out;
 import static java.util.stream.Collectors.toList;
 import static java.util.zip.Deflater.BEST_SPEED;
@@ -68,7 +70,8 @@ public class PubsubIT {
 
   private static final String PROJECT = Util.defaultProject();
 
-  private static final String TOPIC = TEST_TOPIC_PREFIX + ThreadLocalRandom.current().nextLong();
+  private static final String TOPIC = TEST_NAME_PREFIX + ThreadLocalRandom.current().nextLong();
+  private static final String SUBSCRIPTION = TEST_NAME_PREFIX + ThreadLocalRandom.current().nextLong();
 
   private static GoogleCredential CREDENTIAL;
 
@@ -91,6 +94,7 @@ public class PubsubIT {
   @After
   public void tearDown() throws ExecutionException, InterruptedException {
     if (pubsub != null) {
+      pubsub.deleteSubscription(PROJECT, SUBSCRIPTION).exceptionally(t -> null).get();
       pubsub.deleteTopic(PROJECT, TOPIC).exceptionally(t -> null).get();
       pubsub.close();
     }
@@ -100,7 +104,6 @@ public class PubsubIT {
   public void testCreateGetListDeleteTopics() throws Exception {
     testCreateGetListDeleteTopics(pubsub);
   }
-
 
   private static void testCreateGetListDeleteTopics(final Pubsub pubsub) throws Exception {
 
@@ -154,6 +157,67 @@ public class PubsubIT {
   }
 
   @Test
+  public void testCreateGetListDeleteSubscriptions() throws Exception {
+    // Create topic to subscribe to
+    final Topic topic = pubsub.createTopic(PROJECT, TOPIC).get();
+
+    // Create subscription
+    final Subscription expected = Subscription.of(PROJECT, SUBSCRIPTION, TOPIC);
+    {
+      final Subscription subscription = pubsub.createSubscription(PROJECT, SUBSCRIPTION, TOPIC).get();
+      assertThat(subscription.name(), is(expected.name()));
+      assertThat(subscription.topic(), is(expected.topic()));
+    }
+
+    // Get subscription
+    {
+      final Subscription subscription = pubsub.getSubscription(PROJECT, SUBSCRIPTION).get();
+      assertThat(subscription.name(), is(expected.name()));
+      assertThat(subscription.topic(), is(expected.topic()));
+    }
+
+    // Verify that the subscription is listed
+    {
+      final List<Subscription> subscriptions = subscriptions(pubsub);
+      assertThat(subscriptions.stream()
+                     .anyMatch(s -> s.name().equals(expected.name()) &&
+                                    s.topic().equals(expected.topic())),
+                 is(true));
+    }
+
+    // Delete subscription
+    {
+      pubsub.deleteSubscription(PROJECT, SUBSCRIPTION).get();
+    }
+
+    // Verify that subscription is gone
+    {
+      final Subscription subscription = pubsub.getSubscription(PROJECT, SUBSCRIPTION).get();
+      assertThat(subscription, is(nullValue()));
+    }
+    {
+      final List<Subscription> subscriptions = subscriptions(pubsub);
+      assertThat(subscriptions.stream()
+                     .noneMatch(s -> s.name().equals(expected.name())),
+                 is(true));
+    }
+  }
+
+  private static List<Subscription> subscriptions(final Pubsub pubsub) throws ExecutionException, InterruptedException {
+    final List<Subscription> subscriptions = new ArrayList<>();
+    Optional<String> pageToken = Optional.empty();
+    while (true) {
+      final SubscriptionList response = pubsub.listSubscriptions(PROJECT, pageToken.orElse(null)).get();
+      subscriptions.addAll(response.subscriptions());
+      pageToken = response.nextPageToken();
+      if (!pageToken.isPresent()) {
+        break;
+      }
+    }
+    return subscriptions;
+  }
+
+  @Test
   public void testPublish() throws IOException, ExecutionException, InterruptedException {
     pubsub.createTopic(PROJECT, TOPIC).get();
     final String data = BaseEncoding.base64().encode("hello world".getBytes("UTF-8"));
@@ -203,6 +267,12 @@ public class PubsubIT {
 
   @Test
   @Ignore
+  public void listAllSubscriptions() throws ExecutionException, InterruptedException {
+    subscriptions(pubsub).stream().map(s -> s.name() + ", topic=" + s.topic()).forEach(System.out::println);
+  }
+
+  @Test
+  @Ignore
   public void cleanUpTestTopics() throws ExecutionException, InterruptedException {
     final ExecutorService executor = Executors.newFixedThreadPool(CONCURRENCY / 2);
     Optional<String> pageToken = Optional.empty();
@@ -210,10 +280,33 @@ public class PubsubIT {
       final TopicList response = pubsub.listTopics(PROJECT, pageToken.orElse(null)).get();
       response.topics().stream()
           .map(Topic::name)
-          .filter(t -> t.contains(TEST_TOPIC_PREFIX))
+          .filter(t -> t.contains(TEST_NAME_PREFIX))
           .map(t -> executor.submit(() -> {
             System.out.println("Removing topic: " + t);
             return pubsub.deleteTopic(t).get();
+          }))
+          .collect(toList())
+          .forEach(Futures::getUnchecked);
+      pageToken = response.nextPageToken();
+      if (!pageToken.isPresent()) {
+        break;
+      }
+    }
+  }
+
+  @Test
+  @Ignore
+  public void cleanUpTestSubscriptions() throws ExecutionException, InterruptedException {
+    final ExecutorService executor = Executors.newFixedThreadPool(CONCURRENCY / 2);
+    Optional<String> pageToken = Optional.empty();
+    while (true) {
+      final SubscriptionList response = pubsub.listSubscriptions(PROJECT, pageToken.orElse(null)).get();
+      response.subscriptions().stream()
+          .map(Subscription::name)
+          .filter(s -> s.contains(TEST_NAME_PREFIX))
+          .map(s -> executor.submit(() -> {
+            System.out.println("Removing subscription: " + s);
+            return pubsub.deleteSubscription(s).get();
           }))
           .collect(toList())
           .forEach(Futures::getUnchecked);
