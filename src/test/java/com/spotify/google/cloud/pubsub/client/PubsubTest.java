@@ -295,7 +295,7 @@ public class PubsubTest {
     assertThat(request.getPath(), is(expectedPath));
     assertRequestHeaders(request);
 
-    final Subscription response = Subscription.of(PROJECT, TOPIC_1);
+    final Subscription response = Subscription.of(PROJECT, SUBSCRIPTION_1, TOPIC_1);
     server.enqueue(new MockResponse().setBody(json(response)));
 
     final Subscription subscription = future.get(10, SECONDS);
