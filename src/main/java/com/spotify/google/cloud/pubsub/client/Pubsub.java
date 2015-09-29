@@ -77,7 +77,10 @@ public class Pubsub implements Closeable {
   private static final String CLOUD_PLATFORM = "https://www.googleapis.com/auth/cloud-platform";
   private static final String PUBSUB = "https://www.googleapis.com/auth/pubsub";
   private static final List<String> SCOPES = ImmutableList.of(CLOUD_PLATFORM, PUBSUB);
-  public static final String APPLICATION_JSON_UTF8 = "application/json; charset=UTF-8";
+  private static final String APPLICATION_JSON_UTF8 = "application/json; charset=UTF-8";
+
+  private static final int DEFAULT_PULL_MAX_MESSAGES = 1000;
+  private static final boolean DEFAULT_PULL_RETURN_IMMEDIATELY = true;
 
   private final AsyncHttpClient client;
   private final String baseUri;
@@ -341,7 +344,7 @@ public class Pubsub implements Closeable {
    * @return A future that is completed when this request is completed.
    */
   public PubsubFuture<SubscriptionList> listSubscriptions(final String project,
-                                                   final String pageToken) {
+                                                          final String pageToken) {
     final String query = (pageToken == null) ? "" : "?pageToken=" + pageToken;
     final String path = "projects/" + project + "/subscriptions" + query;
     return get("list subscriptions", path, SubscriptionList.class);
@@ -480,6 +483,138 @@ public class Pubsub implements Closeable {
     final String path = canonicalTopic + ":publish";
     return post("publish", path, PublishRequest.of(messages), PublishResponse.class)
         .thenApply(PublishResponse::messageIds);
+  }
+
+  /**
+   * Pull a batch of messages.
+   *
+   * @param project      The Google Cloud project.
+   * @param subscription The subscription to pull from.
+   * @return a future that is completed with a list of received messages.
+   */
+  public PubsubFuture<List<ReceivedMessage>> pull(final String project, final String subscription) {
+    return pull(project, subscription, DEFAULT_PULL_RETURN_IMMEDIATELY, DEFAULT_PULL_MAX_MESSAGES);
+  }
+
+  /**
+   * Pull a batch of messages.
+   *
+   * @param project      The Google Cloud project.
+   * @param subscription The subscription to pull from.
+   * @param returnImmediately         {@code true} to return immediately if the queue is empty. {@code false} to wait
+   *                                  for at least one message before returning.
+   * @return a future that is completed with a list of received messages.
+   */
+  public PubsubFuture<List<ReceivedMessage>> pull(final String project, final String subscription,
+                                                  final boolean returnImmediately) {
+    return pull(project, subscription, returnImmediately, DEFAULT_PULL_MAX_MESSAGES);
+  }
+
+  /**
+   * Pull a batch of messages.
+   *
+   * @param project      The Google Cloud project.
+   * @param subscription The subscription to pull from.
+   * @param returnImmediately         {@code true} to return immediately if the queue is empty. {@code false} to wait
+   *                                  for at least one message before returning.
+   * @param maxMessages               Maximum number of messages to return in batch.
+   * @return a future that is completed with a list of received messages.
+   */
+  public PubsubFuture<List<ReceivedMessage>> pull(final String project, final String subscription,
+                                                  final boolean returnImmediately, final int maxMessages) {
+    return pull(Subscription.canonicalSubscription(project, subscription), returnImmediately, maxMessages);
+  }
+
+  /**
+   * Pull a batch of messages.
+   *
+   * @param canonicalSubscriptionName The canonical (including project name) subscription to pull from.
+   * @return a future that is completed with a list of received messages.
+   */
+  public PubsubFuture<List<ReceivedMessage>> pull(final String canonicalSubscriptionName) {
+    return pull(canonicalSubscriptionName, DEFAULT_PULL_RETURN_IMMEDIATELY);
+  }
+
+  /**
+   * Pull a batch of messages.
+   *
+   * @param canonicalSubscriptionName The canonical (including project name) subscription to pull from.
+   * @param returnImmediately         {@code true} to return immediately if the queue is empty. {@code false} to wait
+   *                                  for at least one message before returning.
+   * @return a future that is completed with a list of received messages.
+   */
+  public PubsubFuture<List<ReceivedMessage>> pull(final String canonicalSubscriptionName,
+                                                  final boolean returnImmediately) {
+    return pull(canonicalSubscriptionName, returnImmediately, DEFAULT_PULL_MAX_MESSAGES);
+  }
+
+  /**
+   * Pull a batch of messages.
+   *
+   * @param canonicalSubscriptionName The canonical (including project name) subscription to pull from.
+   * @param returnImmediately         {@code true} to return immediately if the queue is empty. {@code false} to wait
+   *                                  for at least one message before returning.
+   * @param maxMessages               Maximum number of messages to return in batch.
+   * @return a future that is completed with a list of received messages.
+   */
+  public PubsubFuture<List<ReceivedMessage>> pull(final String canonicalSubscriptionName,
+                                                  final boolean returnImmediately, final int maxMessages) {
+    final String path = canonicalSubscriptionName + ":pull";
+    final PullRequest req = PullRequest.builder()
+        .returnImmediately(returnImmediately)
+        .maxMessages(maxMessages)
+        .build();
+    return pull(path, req);
+  }
+
+  /**
+   * Pull a batch of messages.
+   *
+   * @param pullRequest The pull request.
+   * @return a future that is completed with a list of received messages.
+   */
+  public PubsubFuture<List<ReceivedMessage>> pull(final String path, final PullRequest pullRequest) {
+    return post("pull", path, pullRequest, PullResponse.class)
+        .thenApply(PullResponse::receivedMessages);
+  }
+
+  /**
+   * Acknowledge a batch of received messages.
+   *
+   * @param project      The Google Cloud project.
+   * @param subscription The subscription to acknowledge messages on.
+   * @param ackIds       List of message ID's to acknowledge.
+   * @return A future that is completed when this request is completed.
+   */
+  public PubsubFuture<Void> acknowledge(final String project, final String subscription, final String... ackIds) {
+    return acknowledge(project, subscription, asList(ackIds));
+  }
+
+  /**
+   * Acknowledge a batch of received messages.
+   *
+   * @param project      The Google Cloud project.
+   * @param subscription The subscription to acknowledge messages on.
+   * @param ackIds       List of message ID's to acknowledge.
+   * @return A future that is completed when this request is completed.
+   */
+  public PubsubFuture<Void> acknowledge(final String project, final String subscription, final List<String> ackIds) {
+    return acknowledge(Subscription.canonicalSubscription(project, subscription), ackIds);
+  }
+
+  /**
+   * Acknowledge a batch of received messages.
+   *
+   * @param canonicalSubscriptionName The canonical (including project name) subscription to acknowledge messages on.
+   * @param ackIds                    List of message ID's to acknowledge.
+   * @return A future that is completed when this request is completed.
+   */
+  public PubsubFuture<Void> acknowledge(final String canonicalSubscriptionName, final List<String> ackIds) {
+    final String path = canonicalSubscriptionName + ":acknowledge";
+    final AcknowledgeRequest req = AcknowledgeRequest.builder()
+        .ackIds(ackIds)
+        .build();
+    return post("acknowledge", path, req, Void.class);
   }
 
   /**

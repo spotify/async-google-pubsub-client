@@ -47,6 +47,7 @@ import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.google.common.net.HttpHeaders.USER_AGENT;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
@@ -391,6 +392,90 @@ public class PubsubTest {
     server.enqueue(new MockResponse().setBody(json(response)));
     final List<String> messageIds = future.get(10, SECONDS);
     assertThat(messageIds, contains(ids));
+  }
+
+  @Test
+  public void testPullEmpty() throws InterruptedException, ExecutionException, TimeoutException {
+    testPull();
+  }
+
+  @Test
+  public void testPullSingle() throws InterruptedException, ExecutionException, TimeoutException {
+    testPull(ReceivedMessage.ofEncoded("a0", "m0"));
+  }
+
+  @Test
+  public void testPullBatch() throws InterruptedException, ExecutionException, TimeoutException {
+    testPull(ReceivedMessage.ofEncoded("a0", "m0"),
+             ReceivedMessage.ofEncoded("a1", "m1"),
+             ReceivedMessage.ofEncoded("a2", "m2"));
+  }
+
+  private void testPull(final ReceivedMessage... messages)
+      throws InterruptedException, ExecutionException, TimeoutException {
+    final PubsubFuture<List<ReceivedMessage>> future = pubsub.pull(PROJECT, SUBSCRIPTION_1);
+
+    final String expectedPath = BASE_PATH + Subscription.canonicalSubscription(PROJECT, SUBSCRIPTION_1) + ":pull";
+
+    assertThat(future.operation(), is("pull"));
+    assertThat(future.method(), is("POST"));
+    assertThat(future.uri(), is(server.getUrl(expectedPath).toString()));
+    assertThat(future.payloadSize(), is(greaterThan(0L)));
+
+    final RecordedRequest request = server.takeRequest(10, SECONDS);
+
+    assertThat(request.getMethod(), is("POST"));
+    assertThat(request.getPath(), is(expectedPath));
+    assertThat(request.getHeader(CONTENT_ENCODING), is("gzip"));
+    assertThat(request.getHeader(CONTENT_LENGTH), is(String.valueOf(future.payloadSize())));
+    assertThat(request.getHeader(CONTENT_TYPE), is("application/json; charset=UTF-8"));
+
+    assertRequestHeaders(request);
+
+    final ImmutableMap<String, ImmutableList<ReceivedMessage>> response = ImmutableMap.of(
+        "receivedMessages", ImmutableList.copyOf(messages));
+    server.enqueue(new MockResponse().setBody(json(response)));
+    final List<ReceivedMessage> receivedMessages = future.get(10, SECONDS);
+    if (messages.length == 0) {
+      assertThat(receivedMessages, is(empty()));
+    } else {
+      assertThat(receivedMessages, contains(messages));
+    }
+  }
+
+  @Test
+  public void testAcknowledgeSingle() throws InterruptedException, ExecutionException, TimeoutException {
+    testAcknowledge("a0");
+  }
+
+  @Test
+  public void testAcknowledgeBatch() throws InterruptedException, ExecutionException, TimeoutException {
+    testAcknowledge("a0", "a1", "a2");
+  }
+
+  private void testAcknowledge(final String... ackIds)
+      throws InterruptedException, ExecutionException, TimeoutException {
+    final PubsubFuture<Void> future = pubsub.acknowledge(PROJECT, SUBSCRIPTION_1, ackIds);
+
+    final String expectedPath = BASE_PATH + Subscription.canonicalSubscription(PROJECT, SUBSCRIPTION_1) + ":acknowledge";
+
+    assertThat(future.operation(), is("acknowledge"));
+    assertThat(future.method(), is("POST"));
+    assertThat(future.uri(), is(server.getUrl(expectedPath).toString()));
+    assertThat(future.payloadSize(), is(greaterThan(0L)));
+
+    final RecordedRequest request = server.takeRequest(10, SECONDS);
+
+    assertThat(request.getMethod(), is("POST"));
+    assertThat(request.getPath(), is(expectedPath));
+    assertThat(request.getHeader(CONTENT_ENCODING), is("gzip"));
+    assertThat(request.getHeader(CONTENT_LENGTH), is(String.valueOf(future.payloadSize())));
+    assertThat(request.getHeader(CONTENT_TYPE), is("application/json; charset=UTF-8"));
+
+    assertRequestHeaders(request);
+
+    server.enqueue(new MockResponse());
+    future.get(10, SECONDS);
   }
 
   @Test()

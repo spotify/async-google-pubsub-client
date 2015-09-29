@@ -19,6 +19,7 @@ package com.spotify.google.cloud.pubsub.client.integration;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.googleapis.util.Utils;
 import com.google.api.client.repackaged.com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
 import com.google.common.io.BaseEncoding;
 import com.google.common.util.concurrent.Futures;
 
@@ -26,6 +27,7 @@ import com.spotify.google.cloud.pubsub.client.Message;
 import com.spotify.google.cloud.pubsub.client.MessageBuilder;
 import com.spotify.google.cloud.pubsub.client.Pubsub;
 import com.spotify.google.cloud.pubsub.client.PubsubFuture;
+import com.spotify.google.cloud.pubsub.client.ReceivedMessage;
 import com.spotify.google.cloud.pubsub.client.Subscription;
 import com.spotify.google.cloud.pubsub.client.SubscriptionList;
 import com.spotify.google.cloud.pubsub.client.Topic;
@@ -39,12 +41,15 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -57,9 +62,11 @@ import static java.util.zip.Deflater.BEST_SPEED;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.isEmptyOrNullString;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 /**
  * Tests talking to the real Google Cloud Pub/Sub service.
@@ -224,6 +231,64 @@ public class PubsubIT {
     final Message message = new MessageBuilder().data(data).build();
     final List<String> response = pubsub.publish(PROJECT, TOPIC, message).get();
     out.println(response);
+  }
+
+  @Test
+  public void testPullSingle() throws IOException, ExecutionException, InterruptedException {
+    pubsub.createTopic(PROJECT, TOPIC).get();
+    pubsub.createSubscription(PROJECT, SUBSCRIPTION, TOPIC).get();
+    final String data = BaseEncoding.base64().encode("hello world".getBytes("UTF-8"));
+    final Message message = Message.of(data);
+    final List<String> ids = pubsub.publish(PROJECT, TOPIC, message).get();
+    final String id = ids.get(0);
+    final List<ReceivedMessage> response = pubsub.pull(PROJECT, SUBSCRIPTION, false).get();
+    assertThat(response.size(), is(1));
+    assertThat(response.get(0).message().data(), is(data));
+    assertThat(response.get(0).message().messageId().get(), is(id));
+    assertThat(response.get(0).ackId(), not(isEmptyOrNullString()));
+    pubsub.acknowledge(PROJECT, SUBSCRIPTION, response.get(0).ackId()).get();
+  }
+
+  @Test
+  public void testPullBatch() throws IOException, ExecutionException, InterruptedException {
+    pubsub.createTopic(PROJECT, TOPIC).get();
+    pubsub.createSubscription(PROJECT, SUBSCRIPTION, TOPIC).get();
+    final List<Message> messages = ImmutableList.of(Message.ofEncoded("m0"),
+                                                    Message.ofEncoded("m1"),
+                                                    Message.ofEncoded("m2"));
+    final List<String> ids = pubsub.publish(PROJECT, TOPIC, messages).get();
+    final Map<String, ReceivedMessage> received = new HashMap<>();
+
+    // Pull until we've received 3 messages or time out. Store received messages in a map as they might be out of order.
+    final long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+    while (true) {
+      final List<ReceivedMessage> response = pubsub.pull(PROJECT, SUBSCRIPTION).get();
+      for (final ReceivedMessage message : response) {
+        received.put(message.message().messageId().get(), message);
+      }
+      if (received.size() >= 3) {
+        break;
+      }
+      if (System.nanoTime() > deadlineNanos) {
+        fail("timeout");
+      }
+    }
+
+    // Verify received messages
+    assertThat(received.size(), is(3));
+    for (int i = 0; i < 3; i++) {
+      final String id = ids.get(i);
+      final ReceivedMessage receivedMessage = received.get(id);
+      assertThat(receivedMessage.message().data(), is(messages.get(i).data()));
+      assertThat(receivedMessage.message().messageId().get(), is(id));
+      assertThat(receivedMessage.ackId(), not(isEmptyOrNullString()));
+    }
+
+    // Batch ack the messages
+    final List<String> ackIds = received.values().stream()
+        .map(ReceivedMessage::ackId)
+        .collect(Collectors.toList());
+    pubsub.acknowledge(PROJECT, SUBSCRIPTION, ackIds).get();
   }
 
   @Test
