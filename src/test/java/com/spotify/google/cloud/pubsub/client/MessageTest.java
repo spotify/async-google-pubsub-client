@@ -16,24 +16,26 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
-import java.util.Optional;
+import com.google.common.io.BaseEncoding;
 
-import io.norberg.automatter.AutoMatter;
+import org.junit.Test;
 
-@AutoMatter
-public interface PushConfig {
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertThat;
 
-  Optional<String> pushEndpoint();
+public class MessageTest {
 
-  static PushConfigBuilder builder() {
-    return new PushConfigBuilder();
+  @Test
+  public void testOf() throws Exception {
+    final String encoded = BaseEncoding.base64().encode("hello world".getBytes("UTF-8"));
+    final Message message = Message.of(encoded);
+    assertThat(message.data(), is(encoded));
   }
 
-  static PushConfig of(String pushEndpoint) {
-    return builder().pushEndpoint(pushEndpoint).build();
-  }
-
-  static PushConfig of() {
-    return builder().build();
+  @Test
+  public void testOfEncoded() throws Exception {
+    final String encoded = BaseEncoding.base64().encode("hello world".getBytes("UTF-8"));
+    final Message message = Message.ofEncoded("hello world");
+    assertThat(message.data(), is(encoded));
   }
 }

@@ -16,24 +16,18 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
-import java.util.Optional;
+import org.junit.Test;
 
-import io.norberg.automatter.AutoMatter;
+import static org.hamcrest.Matchers.contains;
+import static org.junit.Assert.assertThat;
 
-@AutoMatter
-public interface PushConfig {
+public class PullResponseTest {
 
-  Optional<String> pushEndpoint();
-
-  static PushConfigBuilder builder() {
-    return new PushConfigBuilder();
-  }
-
-  static PushConfig of(String pushEndpoint) {
-    return builder().pushEndpoint(pushEndpoint).build();
-  }
-
-  static PushConfig of() {
-    return builder().build();
+  @Test
+  public void testOf() throws Exception {
+    final ReceivedMessage[] receivedMessages = {ReceivedMessage.ofEncoded("a1", "m1"),
+                                                ReceivedMessage.ofEncoded("a2", "m2")};
+    final PullResponse pullResponse = PullResponse.of(receivedMessages);
+    assertThat(pullResponse.receivedMessages(), contains(receivedMessages));
   }
 }

@@ -16,24 +16,25 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
+import org.junit.Test;
+
 import java.util.Optional;
 
-import io.norberg.automatter.AutoMatter;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertThat;
 
-@AutoMatter
-public interface PushConfig {
+public class PushConfigTest {
 
-  Optional<String> pushEndpoint();
-
-  static PushConfigBuilder builder() {
-    return new PushConfigBuilder();
+  @Test
+  public void testOf() throws Exception {
+    final String pushEndpoint = "https://foo.bar/baz";
+    final PushConfig pushConfig = PushConfig.of(pushEndpoint);
+    assertThat(pushConfig.pushEndpoint(), is(Optional.of(pushEndpoint)));
   }
 
-  static PushConfig of(String pushEndpoint) {
-    return builder().pushEndpoint(pushEndpoint).build();
-  }
-
-  static PushConfig of() {
-    return builder().build();
+  @Test
+  public void testOfEmpty() throws Exception {
+    final PushConfig pushConfig = PushConfig.of();
+    assertThat(pushConfig.pushEndpoint(), is(Optional.empty()));
   }
 }
