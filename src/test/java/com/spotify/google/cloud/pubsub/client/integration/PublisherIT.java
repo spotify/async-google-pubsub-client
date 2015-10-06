@@ -62,12 +62,12 @@ public class PublisherIT {
 
   @After
   public void tearDown() throws ExecutionException, InterruptedException {
-    if (publisher != null) {
-      publisher.close();
-    }
     if (pubsub != null) {
       pubsub.deleteTopic(PROJECT, TOPIC).exceptionally(t -> null).get();
       pubsub.close();
+    }
+    if (publisher != null) {
+      publisher.close();
     }
   }
 
@@ -83,5 +83,6 @@ public class PublisherIT {
     futures.stream()
         .map(Futures::getUnchecked)
         .forEach(id -> out.println("message id: " + id));
+
   }
 }

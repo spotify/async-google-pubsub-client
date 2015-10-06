@@ -98,20 +98,20 @@ public class Pubsub implements Closeable {
 
     log.debug("creating new pubsub client with config:");
     log.debug("uri: {}", builder.uri);
-    log.debug("connect timeout: {}", config.getConnectTimeout());
-    log.debug("read timeout: {}", config.getReadTimeout());
-    log.debug("request timeout: {}", config.getRequestTimeout());
-    log.debug("max connections: {}", config.getMaxConnections());
-    log.debug("max connections per host: {}", config.getMaxConnectionsPerHost());
-    log.debug("enabled cipher suites: {}", Arrays.toString(config.getEnabledCipherSuites()));
-    log.debug("response compression enforced: {}", config.isCompressionEnforced());
+    log.debug("connect timeout: {}", config.getConnectionTimeoutInMs());
+    // log.debug("read timeout: {}", config.getReadTimeout());
+    log.debug("request timeout: {}", config.getRequestTimeoutInMs());
+    log.debug("max connections: {}", config.getMaxTotalConnections());
+    log.debug("max connections per host: {}", config.getMaxConnectionPerHost());
+    // log.debug("enabled cipher suites: {}", Arrays.toString(config.getEnabledCipherSuites()));
+    log.debug("response compression enforced: {}", config.isCompressionEnabled());
     log.debug("request compression level: {}", builder.compressionLevel);
-    log.debug("accept any certificate: {}", config.isAcceptAnyCertificate());
-    log.debug("follows redirect: {}", config.isFollowRedirect());
-    log.debug("pooled connection TTL: {}", config.getConnectionTTL());
-    log.debug("pooled connection idle timeout: {}", config.getPooledConnectionIdleTimeout());
-    log.debug("pooling connections: {}", config.isAllowPoolingConnections());
-    log.debug("pooling SSL connections: {}", config.isAllowPoolingSslConnections());
+    // log.debug("accept any certificate: {}", config.isAcceptAnyCertificate());
+    log.debug("follows redirect: {}", config.isRedirectEnabled());
+    // log.debug("pooled connection TTL: {}", config.getConnectionTTL());
+    log.debug("pooled connection idle timeout: {}", config.getIdleConnectionInPoolTimeoutInMs());
+    log.debug("pooling connections: {}", config.getAllowPoolingConnection());
+    // log.debug("pooling SSL connections: {}", config.isAllowPoolingSslConnections());
     log.debug("user agent: {}", config.getUserAgent());
     log.debug("max request retry: {}", config.getMaxRequestRetry());
 
@@ -730,62 +730,66 @@ public class Pubsub implements Closeable {
     final Request request = builder.build();
 
     final PubsubFuture<T> future = new PubsubFuture<>(operation, method.toString(), uri, payloadSize);
-    client.executeRequest(request, new AsyncHandler<Void>() {
-      private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try {
+      client.executeRequest(request, new AsyncHandler<Void>() {
+        private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 
-      @Override
-      public void onThrowable(final Throwable t) {
-        future.fail(t);
-      }
-
-      @Override
-      public STATE onBodyPartReceived(final HttpResponseBodyPart bodyPart) throws Exception {
-        bytes.write(bodyPart.getBodyPartBytes());
-        return STATE.CONTINUE;
-      }
-
-      @Override
-      public STATE onStatusReceived(final HttpResponseStatus status) throws Exception {
-
-        // Return null for 404'd GET & DELETE requests
-        if (status.getStatusCode() == 404 && method == HttpMethod.GET || method == HttpMethod.DELETE) {
-          future.succeed(null);
-          return STATE.ABORT;
+        @Override
+        public void onThrowable(final Throwable t) {
+          future.fail(t);
         }
 
-        // Fail on non-2xx responses
-        final int statusCode = status.getStatusCode();
-        if (!(statusCode >= 200 && statusCode < 300)) {
-          future.fail(new RequestFailedException(status.getStatusCode(), status.getStatusText()));
-          return STATE.ABORT;
+        @Override
+        public STATE onBodyPartReceived(final HttpResponseBodyPart bodyPart) throws Exception {
+          bytes.write(bodyPart.getBodyPartBytes());
+          return STATE.CONTINUE;
         }
 
-        if (responseClass == Void.class) {
-          future.succeed(null);
-          return STATE.ABORT;
+        @Override
+        public STATE onStatusReceived(final HttpResponseStatus status) throws Exception {
+
+          // Return null for 404'd GET & DELETE requests
+          if (status.getStatusCode() == 404 && method == HttpMethod.GET || method == HttpMethod.DELETE) {
+            future.succeed(null);
+            return STATE.ABORT;
+          }
+
+          // Fail on non-2xx responses
+          final int statusCode = status.getStatusCode();
+          if (!(statusCode >= 200 && statusCode < 300)) {
+            future.fail(new RequestFailedException(status.getStatusCode(), status.getStatusText()));
+            return STATE.ABORT;
+          }
+
+          if (responseClass == Void.class) {
+            future.succeed(null);
+            return STATE.ABORT;
+          }
+
+          return STATE.CONTINUE;
         }
 
-        return STATE.CONTINUE;
-      }
+        @Override
+        public STATE onHeadersReceived(final HttpResponseHeaders headers) throws Exception {
+          return STATE.CONTINUE;
+        }
 
-      @Override
-      public STATE onHeadersReceived(final HttpResponseHeaders headers) throws Exception {
-        return STATE.CONTINUE;
-      }
-
-      @Override
-      public Void onCompleted() throws Exception {
-        if (future.isDone()) {
+        @Override
+        public Void onCompleted() throws Exception {
+          if (future.isDone()) {
+            return null;
+          }
+          try {
+            future.succeed(Json.read(bytes.toByteArray(), responseClass));
+          } catch (IOException e) {
+            future.fail(e);
+          }
           return null;
         }
-        try {
-          future.succeed(Json.read(bytes.toByteArray(), responseClass));
-        } catch (IOException e) {
-          future.fail(e);
-        }
-        return null;
-      }
-    });
+      });
+    } catch (IOException e) {
+      throw new RuntimeException(e.getMessage(), e);
+    }
 
     return future;
   }
@@ -832,10 +836,12 @@ public class Pubsub implements Closeable {
     private static final int DEFAULT_REQUEST_TIMEOUT_MS = 30000;
 
     private final AsyncHttpClientConfig.Builder clientConfig = new AsyncHttpClientConfig.Builder()
-        .setCompressionEnforced(true)
+        .setCompressionEnabled(true)
+        // .setCompressionEnforced(true)
         .setUseProxySelector(true)
-        .setRequestTimeout(DEFAULT_REQUEST_TIMEOUT_MS)
-        .setReadTimeout(DEFAULT_REQUEST_TIMEOUT_MS);
+        // .setReadTimeout(DEFAULT_REQUEST_TIMEOUT_MS)
+            // .setRequestTimeout(DEFAULT_REQUEST_TIMEOUT_MS)
+        .setRequestTimeoutInMs(DEFAULT_REQUEST_TIMEOUT_MS);
 
     private Credential credential;
     private URI uri = DEFAULT_URI;
@@ -858,7 +864,9 @@ public class Pubsub implements Closeable {
      * @return this config builder.
      */
     public Builder connectTimeout(final int connectTimeout) {
-      clientConfig.setConnectTimeout(connectTimeout);
+      clientConfig
+          // .setConnectTimeout(connectTimeout)
+          .setConnectionTimeoutInMs(connectTimeout);
       return this;
     }
 
@@ -885,7 +893,7 @@ public class Pubsub implements Closeable {
      * @return this config builder.
      */
     public Builder readTimeout(final int readTimeout) {
-      clientConfig.setReadTimeout(readTimeout);
+      // clientConfig.setReadTimeout(readTimeout);
       return this;
     }
 
@@ -896,7 +904,8 @@ public class Pubsub implements Closeable {
      * @return this config builder.
      */
     public Builder requestTimeout(final int requestTimeout) {
-      clientConfig.setRequestTimeout(requestTimeout);
+      // clientConfig.setRequestTimeout(requestTimeout);
+      clientConfig.setRequestTimeoutInMs(requestTimeout);
       return this;
     }
 
@@ -907,7 +916,8 @@ public class Pubsub implements Closeable {
      * @return this config builder.
      */
     public Builder maxConnections(final int maxConnections) {
-      clientConfig.setMaxConnections(maxConnections);
+      // clientConfig.setMaxConnections(maxConnections);
+      clientConfig.setMaximumConnectionsPerHost(maxConnections);
       return this;
     }
 
@@ -918,7 +928,7 @@ public class Pubsub implements Closeable {
      * @return this config builder.
      */
     public Builder pooledConnectionTTL(final int pooledConnectionTTL) {
-      clientConfig.setConnectionTTL(pooledConnectionTTL);
+      // clientConfig.setConnectionTTL(pooledConnectionTTL);
       return this;
     }
 
@@ -929,7 +939,8 @@ public class Pubsub implements Closeable {
      * @return this config builder.
      */
     public Builder pooledConnectionIdleTimeout(final int pooledConnectionIdleTimeout) {
-      clientConfig.setPooledConnectionIdleTimeout(pooledConnectionIdleTimeout);
+      // clientConfig.setPooledConnectionIdleTimeout(pooledConnectionIdleTimeout);
+      clientConfig.setIdleConnectionInPoolTimeoutInMs(pooledConnectionIdleTimeout);
       return this;
     }
 
@@ -940,7 +951,8 @@ public class Pubsub implements Closeable {
      * @return this config builder.
      */
     public Builder allowPoolingConnections(final boolean allowPoolingConnections) {
-      clientConfig.setAllowPoolingConnections(allowPoolingConnections);
+      // clientConfig.setAllowPoolingConnections(allowPoolingConnections);
+      clientConfig.setAllowPoolingConnection(allowPoolingConnections);
       return this;
     }
 
@@ -960,7 +972,7 @@ public class Pubsub implements Closeable {
      * @param enabledCipherSuites The cipher suites to enable.
      */
     public Builder enabledCipherSuites(final String... enabledCipherSuites) {
-      clientConfig.setEnabledCipherSuites(enabledCipherSuites);
+      // clientConfig.setEnabledCipherSuites(enabledCipherSuites);
       return this;
     }
 
@@ -970,7 +982,7 @@ public class Pubsub implements Closeable {
      * @param enabledCipherSuites The cipher suites to enable.
      */
     public Builder enabledCipherSuites(final List<String> enabledCipherSuites) {
-      clientConfig.setEnabledCipherSuites(enabledCipherSuites.toArray(new String[enabledCipherSuites.size()]));
+      // clientConfig.setEnabledCipherSuites(enabledCipherSuites.toArray(new String[enabledCipherSuites.size()]));
       return this;
     }
 

@@ -3,7 +3,7 @@
 
   <groupId>com.spotify</groupId>
   <artifactId>async-google-pubsub-client</artifactId>
-  <version>1.13-SNAPSHOT</version>
+  <version>1.13-HADOOP-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>async-google-pubsub-client</name>
@@ -103,12 +103,15 @@
     <dependency>
       <groupId>com.ning</groupId>
       <artifactId>async-http-client</artifactId>
+      <!--
       <version>1.9.29</version>
+      -->
+      <version>1.7.24</version>
     </dependency>
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty</artifactId>
-      <version>3.10.3.Final</version>
+      <version>3.6.6.Final</version>
     </dependency>
 
     <!--test deps-->
@@ -227,7 +230,8 @@
           </execution>
         </executions>
       </plugin>
-      <plugin>
+      <!--
+      <plugin>        
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
         <version>0.7.5.201505241946</version>
@@ -246,6 +250,7 @@
           </execution>
         </executions>
       </plugin>
+      -->
     </plugins>
   </build>
 </project>

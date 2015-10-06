@@ -96,6 +96,7 @@ public class PubsubIT {
     pubsub = Pubsub.builder()
         .maxConnections(CONCURRENCY)
         .credential(CREDENTIAL)
+        .readTimeout(45000)
         .build();
   }
 
