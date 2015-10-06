@@ -757,6 +757,9 @@ public class Pubsub implements Closeable {
           // Fail on non-2xx responses
           final int statusCode = status.getStatusCode();
           if (!(statusCode >= 200 && statusCode < 300)) {
+            log.debug("failing request url: "+request.getRawUrl());
+            log.debug("failing request headers: " + request.getHeaders());
+            log.debug("failing request body: "+request.getStringData());
             future.fail(new RequestFailedException(status.getStatusCode(), status.getStatusText()));
             return STATE.ABORT;
           }
