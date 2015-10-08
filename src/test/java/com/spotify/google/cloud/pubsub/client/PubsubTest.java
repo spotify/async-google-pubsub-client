@@ -46,6 +46,7 @@ import static com.google.common.net.HttpHeaders.CONTENT_LENGTH;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.google.common.net.HttpHeaders.USER_AGENT;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
@@ -555,9 +556,11 @@ public class PubsubTest {
   }
 
   private void assertRequestHeaders(final RecordedRequest request) {
-    assertThat(request.getHeader(USER_AGENT), is("Spotify-Google-Pubsub-Java-Client/1.0.0 (gzip)"));
+    assertThat(request.getHeader(USER_AGENT), anyOf(is("Spotify Google-HTTP-Java-Client/1.20.0 (gzip)"),
+                                                    is("Spotify-Google-Pubsub-Java-Client/1.0.0 (gzip)")));
     assertThat(request.getHeader(AUTHORIZATION), is("Bearer " + ACCESS_TOKEN));
-    assertThat(request.getHeader(ACCEPT_ENCODING), is("gzip,deflate"));
+    assertThat(request.getHeader(ACCEPT_ENCODING), anyOf(is("gzip,deflate"),
+                                                         is("gzip")));
     assertThat(request.getHeader(CONNECTION), is("keep-alive"));
   }
 

@@ -19,12 +19,15 @@ package com.spotify.google.cloud.pubsub.client.integration;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.services.pubsub.PubsubScopes;
 
+import com.spotify.google.cloud.pubsub.client.Message;
 import com.spotify.google.cloud.pubsub.client.Pubsub;
-import com.spotify.google.cloud.pubsub.client.ReceivedMessage;
+import com.spotify.google.cloud.pubsub.client.Puller;
 import com.spotify.logging.LoggingConfigurator;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.zip.Deflater;
 
@@ -69,35 +72,35 @@ public class PullerBenchmark {
     final ProgressMeter meter = new ProgressMeter();
     final ProgressMeter.Metric receives = meter.group("operations").metric("receives", "messages");
 
-    // Pull concurrently
-    for (int i = 0; i < PULLER_CONCURRENCY; i++) {
-      pull(project, pubsub, subscription, receives);
+    final Puller puller = Puller.builder()
+        .pubsub(pubsub)
+        .batchSize(1000)
+        .concurrency(PULLER_CONCURRENCY)
+        .project(project)
+        .subscription(subscription)
+        .messageHandler(new Handler(receives))
+        .build();
+
+    while (true) {
+      Thread.sleep(1000);
     }
   }
 
-  private static void pull(final String project, final Pubsub pubsub, final String subscription,
-                           final ProgressMeter.Metric receives) {
 
-    final long start = System.nanoTime();
+  private static class Handler implements Puller.MessageHandler {
 
-    pubsub.pull(project, subscription, false, 1000)
-        .whenComplete((messages, ex) -> {
-          if (ex != null) {
-            ex.printStackTrace();
-            return;
-          }
-          // Immediately kick off another pull
-          pull(project, pubsub, subscription, receives);
+    private final ProgressMeter.Metric receives;
 
-          // Ack received messages
-          final String[] ackIds = messages.stream().map(ReceivedMessage::ackId).toArray(String[]::new);
-          pubsub.acknowledge(project, subscription, ackIds);
+    public Handler(final ProgressMeter.Metric receives) {
 
-          final long end = System.nanoTime();
-          final long latency = end - start;
+      this.receives = receives;
+    }
 
-          receives.add(messages.size(), latency);
-        });
+    @Override
+    public CompletionStage<String> handleMessage(final Puller puller, final String subscription,
+                                                 final Message message, final String ackId) {
+      receives.inc(0);
+      return CompletableFuture.completedFuture(ackId);
+    }
   }
-
 }
