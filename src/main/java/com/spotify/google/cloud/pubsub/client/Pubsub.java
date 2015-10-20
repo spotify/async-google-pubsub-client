@@ -941,6 +941,7 @@ public class Pubsub implements Closeable {
      */
     public Builder allowPoolingConnections(final boolean allowPoolingConnections) {
       clientConfig.setAllowPoolingConnections(allowPoolingConnections);
+      clientConfig.setAllowPoolingSslConnections(allowPoolingConnections);
       return this;
     }
 
