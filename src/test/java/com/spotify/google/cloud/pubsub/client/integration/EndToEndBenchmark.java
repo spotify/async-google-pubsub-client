@@ -69,7 +69,7 @@ public class EndToEndBenchmark {
     final Pubsub pubsub = Pubsub.builder()
         .credential(credential)
         .compressionLevel(Deflater.BEST_SPEED)
-        .enabledCipherSuites(nonGcmCiphers())
+//        .enabledCipherSuites(nonGcmCiphers())
         .build();
 
     final Publisher publisher = Publisher.builder()
