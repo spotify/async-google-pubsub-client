@@ -18,6 +18,10 @@ package com.spotify.google.cloud.pubsub.client;
 
 import com.google.common.util.concurrent.MoreExecutors;
 
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -29,8 +33,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
-public class Acker {
+class Acker implements Closeable {
 
   private final ScheduledExecutorService scheduler =
       MoreExecutors.getExitingScheduledExecutorService(new ScheduledThreadPoolExecutor(1));
@@ -46,6 +51,9 @@ public class Acker {
   private final int batchSize;
   private final int queueSize;
   private final long maxLatencyMs;
+  private final int concurrency;
+
+  private volatile boolean pending;
 
   private Acker(final Builder builder) {
     this.pubsub = Objects.requireNonNull(builder.pubsub, "pubsub");
@@ -54,6 +62,7 @@ public class Acker {
     this.batchSize = builder.batchSize;
     this.queueSize = Optional.ofNullable(builder.queueSize).orElseGet(() -> batchSize * 10);
     this.maxLatencyMs = builder.maxLatencyMs;
+    this.concurrency = builder.concurrency;
   }
 
   public CompletableFuture<Void> acknowledge(final String ackId) {
@@ -88,9 +97,27 @@ public class Acker {
         // Race with a call to close(). Ignore.
       }
     }
+
+    return future;
+  }
+
+  @Override
+  public void close() throws IOException {
+    // TODO (dano): fail outstanding futures
+    scheduler.shutdownNow();
+    try {
+      scheduler.awaitTermination(30, SECONDS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
   }
 
   private void send() {
+    // Bail if already pending
+    if (pending) {
+      return;
+    }
+
     // Clear the scheduled flag before sending.
     scheduled.set(false);
 
@@ -102,15 +129,73 @@ public class Acker {
       return;
     }
 
-    // Enqueue as pending for sending by the earliest available concurrent request slot
+    // Mark as pending for sending by the earliest available concurrent request slot
     pending = true;
-    pendingTopics.offer(this);
 
-    // Tell the listener that a topic became pending for sending as early as possible.
-    listener.topicPending(Publisher.this, topic, currentOutstanding, concurrency);
-
-    // Attempt to send pending to guard against losing a race while enqueuing this topic as pending.
+    // Attempt to send pending to guard against losing a race while marking as pending.
     sendPending();
+  }
+
+  private void sendPending() {
+    while (outstanding.get() < concurrency) {
+      pending = false;
+      final int sent = sendBatch();
+
+      // Did we send a whole batch? Then there might be more acks in the queue. Mark as pending again.
+      if (sent == batchSize) {
+        pending = true;
+      }
+    }
+  }
+
+  private int sendBatch() {
+    final List<String> batch = new ArrayList<>();
+    final List<CompletableFuture<Void>> futures = new ArrayList<>();
+
+    // Drain queue up to batch size
+    while (batch.size() < batchSize) {
+      final QueuedAck ack = queue.poll();
+      if (ack == null) {
+        break;
+      }
+      batch.add(ack.ackId);
+      futures.add(ack.future);
+    }
+
+    // Was there anything to send?
+    if (batch.size() == 0) {
+      return 0;
+    }
+
+    // Decrement the queue size counter
+    size.updateAndGet(i -> i - batch.size());
+
+    // Send the batch request and increment the outstanding request counter
+    outstanding.incrementAndGet();
+    final PubsubFuture<Void> batchFuture = pubsub.acknowledge(project, subscription, batch);
+    batchFuture.whenComplete(
+        (Void ignore, Throwable ex) -> {
+
+          // Decrement the outstanding request counter
+          outstanding.decrementAndGet();
+
+          // Fail all futures if the batch request failed
+          if (ex != null) {
+            futures.forEach(f -> f.completeExceptionally(ex));
+            return;
+          }
+
+          // Complete each future
+          for (int i = 0; i < futures.size(); i++) {
+            final CompletableFuture<Void> future = futures.get(i);
+            future.complete(null);
+          }
+        })
+
+        // When batch is complete, process pending acks.
+        .whenComplete((v, t) -> sendPending());
+
+    return batch.size();
   }
 
   /**

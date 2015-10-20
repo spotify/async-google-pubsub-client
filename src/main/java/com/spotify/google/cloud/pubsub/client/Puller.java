@@ -21,13 +21,17 @@ import com.google.common.util.concurrent.MoreExecutors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-public class Puller {
+import static java.util.concurrent.TimeUnit.SECONDS;
+
+public class Puller implements Closeable {
 
   /**
    * A handler for received messages.
@@ -42,8 +46,7 @@ public class Puller {
      * @param message      The message.
      * @return A future that should be completed when the message is to be acked.
      */
-    CompletableFuture<Void> messageReceived(Puller puller, String subscription, ReceivedMessage message,
-                                            final Acker acker);
+    CompletableFuture<Void> messageReceived(Puller puller, String subscription, ReceivedMessage message);
   }
 
   private static final Logger log = LoggerFactory.getLogger(Puller.class);
@@ -83,8 +86,18 @@ public class Puller {
     }
   }
 
+  @Override
+  public void close() throws IOException {
+    scheduler.shutdownNow();
+    try {
+      scheduler.awaitTermination(30, SECONDS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+  }
+
   private void pull() {
-    pubsub.pull(project, subscription, false, 1000)
+    pubsub.pull(project, subscription, false, batchSize)
         .whenComplete((messages, ex) -> {
 
           // Schedule a retry if the pull failed
@@ -101,7 +114,7 @@ public class Puller {
           for (final ReceivedMessage message : messages) {
             final CompletableFuture<Void> ackFuture;
             try {
-              ackFuture = handler.messageReceived(this, subscription, message, acker);
+              ackFuture = handler.messageReceived(this, subscription, message);
             } catch (Exception e) {
               log.error("Message handler threw exception", e);
               continue;
