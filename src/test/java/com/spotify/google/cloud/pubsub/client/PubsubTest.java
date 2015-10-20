@@ -47,6 +47,7 @@ import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.google.common.net.HttpHeaders.USER_AGENT;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
@@ -429,6 +430,7 @@ public class PubsubTest {
     assertThat(request.getHeader(CONTENT_ENCODING), is("gzip"));
     assertThat(request.getHeader(CONTENT_LENGTH), is(String.valueOf(future.payloadSize())));
     assertThat(request.getHeader(CONTENT_TYPE), is("application/json; charset=UTF-8"));
+    assertThat(request.getHeader(ACCEPT_ENCODING), containsString("gzip"));
 
     assertRequestHeaders(request);
 
