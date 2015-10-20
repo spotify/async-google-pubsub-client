@@ -170,7 +170,6 @@ public class Publisher implements Closeable {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
-    pubsub.close();
     closeFuture.complete(null);
     listener.publisherClosed(Publisher.this);
   }
@@ -443,7 +442,7 @@ public class Publisher implements Closeable {
     private long maxLatencyMs = 100;
 
     /**
-     * Set the {@link Pubsub} client to use. The client will be closed when this {@link Publisher} is closed.
+     * Set the {@link Pubsub} client to use.
      *
      * <p>Note: The client should be configured to at least allow as many connections as the concurrency level of this
      * {@link Publisher}.</p>
