@@ -17,7 +17,6 @@
 package com.spotify.google.cloud.pubsub.client.integration;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
-import com.google.api.client.repackaged.com.google.common.base.Throwables;
 import com.google.api.services.pubsub.PubsubScopes;
 
 import com.spotify.google.cloud.pubsub.client.Message;
@@ -28,18 +27,15 @@ import com.spotify.logging.LoggingConfigurator;
 
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 import java.util.zip.Deflater;
 
-import javax.net.ssl.SSLContext;
-
+import static com.spotify.google.cloud.pubsub.client.integration.Util.nonGcmCiphers;
 import static com.spotify.logging.LoggingConfigurator.Level.WARN;
 import static java.util.stream.Collectors.toList;
 
@@ -156,25 +152,5 @@ public class EndToEndBenchmark {
             callback.run();
           }
         });
-  }
-
-  /**
-   * Use non-GCM ciphers for now as the GCM performance in Java 8 (pre 8u60) is not good.
-   *
-   * https://bugs.openjdk.java.net/browse/JDK-8069072
-   */
-  private static String[] nonGcmCiphers() {
-    final SSLContext sslContext;
-    try {
-      sslContext = SSLContext.getDefault();
-    } catch (NoSuchAlgorithmException e) {
-      throw Throwables.propagate(e);
-    }
-
-    final String[] defaultCiphers = sslContext.getDefaultSSLParameters().getCipherSuites();
-
-    return Stream.of(defaultCiphers)
-        .filter(cipher -> !cipher.contains("GCM"))
-        .toArray(String[]::new);
   }
 }

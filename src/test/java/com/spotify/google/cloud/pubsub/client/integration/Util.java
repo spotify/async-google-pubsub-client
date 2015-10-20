@@ -16,12 +16,17 @@
 
 package com.spotify.google.cloud.pubsub.client.integration;
 
+import com.google.api.client.repackaged.com.google.common.base.Throwables;
 import com.google.common.base.Splitter;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
+import java.util.stream.Stream;
+
+import javax.net.ssl.SSLContext;
 
 import static com.google.common.base.CharMatcher.WHITESPACE;
 import static java.lang.System.getProperty;
@@ -61,5 +66,26 @@ class Util {
     }
 
     return defaultProject;
+  }
+
+  /**
+   * Return a list of non-GCM ciphers. GCM performance in Java 8 (pre 8u60) is unusably bad and currently worse than
+   * CBC in >= 8u60.
+   *
+   * https://bugs.openjdk.java.net/browse/JDK-8069072
+   */
+  static String[] nonGcmCiphers() {
+    final SSLContext sslContext;
+    try {
+      sslContext = SSLContext.getDefault();
+    } catch (NoSuchAlgorithmException e) {
+      throw Throwables.propagate(e);
+    }
+
+    final String[] defaultCiphers = sslContext.getDefaultSSLParameters().getCipherSuites();
+
+    return Stream.of(defaultCiphers)
+        .filter(cipher -> !cipher.contains("GCM"))
+        .toArray(String[]::new);
   }
 }
