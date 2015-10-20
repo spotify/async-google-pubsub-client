@@ -69,7 +69,7 @@ public class PullerBenchmark {
     final ProgressMeter meter = new ProgressMeter();
     final ProgressMeter.Metric receives = meter.group("operations").metric("receives", "messages");
 
-    // Pull concurrently and (asynchronously) publish a new message for every message received
+    // Pull concurrently
     for (int i = 0; i < PULLER_CONCURRENCY; i++) {
       pull(project, pubsub, subscription, receives);
     }
