@@ -154,6 +154,16 @@ publishes       107,998 (   84,596 avg) messages/s      597.299 (     645.375 av
 ...
 ```
 
+Pulling Benchmark
+-------------------
+
+Note: This benchmark uses a lot of quota and network bandwidth.
+
+Set the `GOOGLE_PUBSUB_SUBSCRIPTION` env var to the name of a subscription to consume from.
+
+```
+$ mvn exec:exec -Dexec.executable="java" -Dexec.classpathScope="test" -Dexec.args="-cp %classpath com.spotify.google.cloud.pubsub.client.integration.PullerBenchmark"
+```
 
 Releasing
 ---------
