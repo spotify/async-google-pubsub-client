@@ -30,11 +30,11 @@ public interface ReceivedMessage {
   }
 
   static ReceivedMessage of(final String ackId, final String data) {
-    return builder().ackId(ackId).message(Message.ofEncoded(data)).build();
+    return builder().ackId(ackId).message(Message.of(data)).build();
   }
 
   static ReceivedMessage ofEncoded(final String ackId, final String data) {
-    return builder().ackId(ackId).message(Message.of(data)).build();
+    return builder().ackId(ackId).message(Message.ofEncoded(data)).build();
   }
 
   static ReceivedMessageBuilder builder() {

@@ -27,5 +27,6 @@ public class ReceivedMessageTest {
   public void testOfEncoded() throws Exception {
     final ReceivedMessage receivedMessage = ReceivedMessage.ofEncoded("a1", "hello world");
     assertThat(receivedMessage.ackId(), is("a1"));
+    assertThat(receivedMessage.message().data(), is(Message.encode("hello world")));
   }
 }
