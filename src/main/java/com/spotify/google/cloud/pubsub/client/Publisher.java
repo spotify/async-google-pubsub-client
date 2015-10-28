@@ -349,38 +349,40 @@ public class Publisher implements Closeable {
 
       // Send the batch request and increment the outstanding request counter
       outstanding.incrementAndGet();
-      final PubsubFuture<List<String>> batchFuture = pubsub.publish(project, topic, batch);
-      listener.sendingBatch(Publisher.this, topic, unmodifiableList(batch), batchFuture);
-      batchFuture.whenComplete(
-          (List<String> messageIds, Throwable ex) -> {
+      CompletableFuture.runAsync(() -> {
+        final PubsubFuture<List<String>> batchFuture = pubsub.publish(project, topic, batch);
+        listener.sendingBatch(Publisher.this, topic, unmodifiableList(batch), batchFuture);
+        batchFuture.whenComplete(
+            (List<String> messageIds, Throwable ex) -> {
 
-            // Decrement the outstanding request counter
-            outstanding.decrementAndGet();
+              // Decrement the outstanding request counter
+              outstanding.decrementAndGet();
 
-            // Fail all futures if the batch request failed
-            if (ex != null) {
-              futures.forEach(f -> f.completeExceptionally(ex));
-              return;
-            }
+              // Fail all futures if the batch request failed
+              if (ex != null) {
+                futures.forEach(f -> f.completeExceptionally(ex));
+                return;
+              }
 
-            // Verify that the number of message id's and messages match up
-            if (futures.size() != messageIds.size()) {
-              futures.forEach(f -> f.completeExceptionally(
-                  new PubsubException(
-                      "message id count mismatch: " +
-                      futures.size() + " != " + messageIds.size())));
-            }
+              // Verify that the number of message id's and messages match up
+              if (futures.size() != messageIds.size()) {
+                futures.forEach(f -> f.completeExceptionally(
+                    new PubsubException(
+                        "message id count mismatch: " +
+                        futures.size() + " != " + messageIds.size())));
+              }
 
-            // Complete each future with the appropriate message id
-            for (int i = 0; i < futures.size(); i++) {
-              final String messageId = messageIds.get(i);
-              final CompletableFuture<String> future = futures.get(i);
-              future.complete(messageId);
-            }
-          })
+              // Complete each future with the appropriate message id
+              for (int i = 0; i < futures.size(); i++) {
+                final String messageId = messageIds.get(i);
+                final CompletableFuture<String> future = futures.get(i);
+                future.complete(messageId);
+              }
+            })
 
-          // When batch is complete, process pending topics.
-          .whenComplete((v, t) -> sendPending());
+            // When batch is complete, process pending topics.
+            .whenComplete((v, t) -> sendPending());
+      });
 
       return batch.size();
     }
