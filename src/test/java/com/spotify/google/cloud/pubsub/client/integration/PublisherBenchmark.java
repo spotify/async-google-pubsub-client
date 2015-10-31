@@ -65,7 +65,7 @@ public class PublisherBenchmark {
 
     final Publisher publisher = Publisher.builder()
         .pubsub(pubsub)
-        .concurrency(128)
+        .concurrency(64)
         .project(project)
         .build();
 
