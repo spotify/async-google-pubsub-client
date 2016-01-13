@@ -38,7 +38,7 @@ public class PullerExample {
 //        .concurrency(128)
 //        .build();
 
-    final Puller publisher = Puller.builder()
+    final Puller pullar = Puller.builder()
         .pubsub(pubsub)
 //        .acker(acker)
         .project("my-google-cloud-project")

@@ -49,13 +49,17 @@ import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.zip.Deflater;
 import java.util.zip.GZIPOutputStream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.util.concurrent.MoreExecutors.getExitingExecutorService;
 import static com.google.common.util.concurrent.MoreExecutors.getExitingScheduledExecutorService;
 import static com.spotify.google.cloud.pubsub.client.Subscription.canonicalSubscription;
 import static com.spotify.google.cloud.pubsub.client.Subscription.validateCanonicalSubscription;
@@ -95,8 +99,11 @@ public class Pubsub implements Closeable {
   private final Credential credential;
   private final CompletableFuture<Void> closeFuture = new CompletableFuture<>();
 
-  private final ScheduledExecutorService executor = getExitingScheduledExecutorService(
+  private final ScheduledExecutorService scheduler = getExitingScheduledExecutorService(
       new ScheduledThreadPoolExecutor(1));
+
+  private final ExecutorService executor = getExitingExecutorService(
+      (ThreadPoolExecutor) Executors.newCachedThreadPool());
 
   private volatile String accessToken;
   private final int compressionLevel;
@@ -145,7 +152,7 @@ public class Pubsub implements Closeable {
     }
 
     // Wake up every 10 seconds to check if access token has expired
-    executor.scheduleAtFixedRate(this::refreshAccessToken, 10, 10, SECONDS);
+    scheduler.scheduleAtFixedRate(this::refreshAccessToken, 10, 10, SECONDS);
   }
 
   private Credential scoped(final Credential credential) {
@@ -177,6 +184,7 @@ public class Pubsub implements Closeable {
   @Override
   public void close() {
     executor.shutdown();
+    scheduler.shutdown();
     client.close();
     closeFuture.complete(null);
   }
