@@ -29,11 +29,13 @@ import java.io.OutputStream;
 import io.norberg.automatter.jackson.AutoMatterModule;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY;
+import static com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES;
 
 class Json {
 
   private static final ObjectMapper MAPPER = new ObjectMapper()
       .setSerializationInclusion(NON_EMPTY)
+      .configure(FAIL_ON_UNKNOWN_PROPERTIES, false)
       .registerModule(new AutoMatterModule())
       .registerModule(new Jdk8Module())
       .registerModule(new GuavaModule());
