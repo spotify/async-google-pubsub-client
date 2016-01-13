@@ -17,11 +17,9 @@
 package com.spotify.google.cloud.pubsub.client.example;
 
 import com.spotify.google.cloud.pubsub.client.Message;
-import com.spotify.google.cloud.pubsub.client.MessageHandler;
-import com.spotify.google.cloud.pubsub.client.Puller;
 import com.spotify.google.cloud.pubsub.client.Pubsub;
+import com.spotify.google.cloud.pubsub.client.Puller;
 
-import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
@@ -32,46 +30,30 @@ public class PullerExample {
     final Pubsub pubsub = Pubsub.builder()
         .build();
 
-    final MessageHandler handler = new MyMessageHandler();
+    final Puller.MessageHandler handler = new MyMessageHandler();
 
-    final Acker acker = Acker.builder()
-        .pubsub(pubsub)
-        .project("my-google-cloud-project")
-        .concurrency(128)
-        .build();
+//    final Acker acker = Acker.builder()
+//        .pubsub(pubsub)
+//        .project("my-google-cloud-project")
+//        .concurrency(128)
+//        .build();
 
     final Puller publisher = Puller.builder()
         .pubsub(pubsub)
-        .acker(acker)
+//        .acker(acker)
         .project("my-google-cloud-project")
         .subscription("my-subscription")
         .concurrency(128)
         .messageHandler(handler)
         .build();
-
-    // A never ending stream of messages...
-    final Iterable<MessageAndTopic> messageStream = incomingMessages();
-
-    // Publish incoming messages
-    messageStream.forEach(m -> publisher.publish(m.topic, m.message));
   }
 
-  private static Iterable<MessageAndTopic> incomingMessages() {
-    // Some never ending stream of messages...
-    return Collections.emptyList();
-  }
-
-  static class MessageAndTopic {
-
-    String topic;
-    Message message;
-  }
-
-  private static class MyMessageHandler implements MessageHandler {
+  private static class MyMessageHandler implements Puller.MessageHandler {
 
     @Override
-    public CompletionStage<String> handleMessage(final Message message) {
-      return CompletableFuture.completedFuture(message.messageId().get());
+    public CompletionStage<String> messageReceived(final Puller puller, final String subscription,
+                                                   final Message message, final String ackId) {
+      return CompletableFuture.completedFuture(ackId);
     }
   }
 }

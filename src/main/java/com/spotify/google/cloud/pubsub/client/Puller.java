@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -44,9 +44,10 @@ public class Puller implements Closeable {
      * @param puller       The {@link Puller}
      * @param subscription The subscription that the message was received on.
      * @param message      The message.
-     * @return A future that should be completed when the message is to be acked.
+     * @param ackId        The ack id.
+     * @return A future that should be completed with the ack id when the message has been consumed.
      */
-    CompletableFuture<Void> messageReceived(Puller puller, String subscription, ReceivedMessage message);
+    CompletionStage<String> messageReceived(Puller puller, String subscription, Message message, String ackId);
   }
 
   private static final Logger log = LoggerFactory.getLogger(Puller.class);
@@ -112,16 +113,15 @@ public class Puller implements Closeable {
 
           // Call handler for each received message
           for (final ReceivedMessage message : messages) {
-            final CompletableFuture<Void> ackFuture;
+            final CompletionStage<String> ackFuture;
             try {
-              ackFuture = handler.messageReceived(this, subscription, message);
+              ackFuture = handler.messageReceived(this, subscription, message.message(), message.ackId());
             } catch (Exception e) {
               log.error("Message handler threw exception", e);
               continue;
             }
 
-            final String ackId = message.ackId();
-            ackFuture.thenRun(() -> acker.acknowledge(ackId));
+            ackFuture.thenAccept(acker::acknowledge);
           }
         });
   }

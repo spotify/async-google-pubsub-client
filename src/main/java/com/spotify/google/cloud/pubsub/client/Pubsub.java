@@ -19,6 +19,13 @@ package com.spotify.google.cloud.pubsub.client;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.googleapis.util.Utils;
+import com.google.api.client.http.ByteArrayContent;
+import com.google.api.client.http.GenericUrl;
+import com.google.api.client.http.HttpHeaders;
+import com.google.api.client.http.HttpRequest;
+import com.google.api.client.http.HttpRequestFactory;
+import com.google.api.client.http.HttpResponse;
+import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.repackaged.com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 
@@ -60,6 +67,7 @@ import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.CONTENT_ENCOD
 import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
 import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static org.jboss.netty.handler.codec.http.HttpHeaders.Values.GZIP;
+import static org.jboss.netty.handler.codec.http.HttpMethod.POST;
 
 /**
  * An async low-level Google Cloud Pub/Sub client.
@@ -92,6 +100,7 @@ public class Pubsub implements Closeable {
 
   private volatile String accessToken;
   private final int compressionLevel;
+  private NetHttpTransport transport;
 
   private Pubsub(final Builder builder) {
     final AsyncHttpClientConfig config = builder.clientConfig.build();
@@ -114,6 +123,8 @@ public class Pubsub implements Closeable {
     log.debug("pooling SSL connections: {}", config.isAllowPoolingSslConnections());
     log.debug("user agent: {}", config.getUserAgent());
     log.debug("max request retry: {}", config.getMaxRequestRetry());
+
+    this.transport = new NetHttpTransport();
 
     this.client = new AsyncHttpClient(config);
 
@@ -574,7 +585,10 @@ public class Pubsub implements Closeable {
    * @return a future that is completed with a list of received messages.
    */
   public PubsubFuture<List<ReceivedMessage>> pull(final String path, final PullRequest pullRequest) {
-    return post("pull", path, pullRequest, PullResponse.class)
+    // TODO (dano): use async client when chunked encoding is fixed
+//    return post("pull", path, pullRequest, PullResponse.class)
+//        .thenApply(PullResponse::receivedMessages);
+    return requestJavaNet("pull", POST, path, PullResponse.class, pullRequest)
         .thenApply(PullResponse::receivedMessages);
   }
 
@@ -784,6 +798,80 @@ public class Pubsub implements Closeable {
           future.fail(e);
         }
         return null;
+      }
+    });
+
+    return future;
+  }
+
+  /**
+   * Make an HTTP request using {@link java.net.HttpURLConnection}.
+   */
+  private <T> PubsubFuture<T> requestJavaNet(final String operation, final HttpMethod method, final String path,
+                                             final Class<T> responseClass, final Object payload) {
+
+    final HttpRequestFactory requestFactory = transport.createRequestFactory();
+
+    final String uri = baseUri + path;
+
+    final HttpHeaders headers = new HttpHeaders();
+    final HttpRequest request;
+    try {
+      request = requestFactory.buildRequest(method.getName(), new GenericUrl(URI.create(uri)), null);
+    } catch (IOException e) {
+      throw Throwables.propagate(e);
+    }
+
+    headers.setAuthorization("Bearer " + accessToken);
+    headers.setUserAgent(USER_AGENT);
+
+    final long payloadSize;
+    if (payload != NO_PAYLOAD) {
+      final byte[] json = gzipJson(payload);
+      payloadSize = json.length;
+      headers.setContentEncoding(GZIP);
+      headers.setContentLength((long) json.length);
+      headers.setContentType(APPLICATION_JSON_UTF8);
+      request.setContent(new ByteArrayContent(APPLICATION_JSON_UTF8, json));
+    } else {
+      payloadSize = 0;
+    }
+
+    request.setHeaders(headers);
+
+    final PubsubFuture<T> future = new PubsubFuture<>(operation, method.toString(), uri, payloadSize);
+
+    executor.execute(() -> {
+      final HttpResponse response;
+      try {
+        response = request.execute();
+      } catch (IOException e) {
+        future.fail(e);
+        return;
+      }
+
+      // Return null for 404'd GET & DELETE requests
+      if (response.getStatusCode() == 404 && method == HttpMethod.GET || method == HttpMethod.DELETE) {
+        future.succeed(null);
+        return;
+      }
+
+      // Fail on non-2xx responses
+      final int statusCode = response.getStatusCode();
+      if (!(statusCode >= 200 && statusCode < 300)) {
+        future.fail(new RequestFailedException(response.getStatusCode(), response.getStatusMessage()));
+        return;
+      }
+
+      if (responseClass == Void.class) {
+        future.succeed(null);
+        return;
+      }
+
+      try {
+        future.succeed(Json.read(response.getContent(), responseClass));
+      } catch (IOException e) {
+        future.fail(e);
       }
     });
 
