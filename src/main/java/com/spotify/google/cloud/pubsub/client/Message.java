@@ -20,6 +20,7 @@ import com.google.common.io.BaseEncoding;
 
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Optional;
@@ -36,6 +37,8 @@ public interface Message {
   Map<String, String> attributes();
 
   Optional<String> messageId();
+
+  Optional<Instant> publishTime();
 
   static MessageBuilder builder() {
     return new MessageBuilder();

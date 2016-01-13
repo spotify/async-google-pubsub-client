@@ -65,6 +65,7 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.isEmptyOrNullString;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
@@ -251,6 +252,7 @@ public class PubsubIT {
     assertThat(response.size(), is(1));
     assertThat(response.get(0).message().data(), is(data));
     assertThat(response.get(0).message().messageId().get(), is(id));
+    assertThat(response.get(0).message().publishTime().get(), is(notNullValue()));
     assertThat(response.get(0).ackId(), not(isEmptyOrNullString()));
 
     // Modify ack deadline

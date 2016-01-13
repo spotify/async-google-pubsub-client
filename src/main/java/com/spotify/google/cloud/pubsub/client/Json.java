@@ -22,6 +22,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.guava.GuavaModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -38,6 +39,7 @@ class Json {
       .configure(FAIL_ON_UNKNOWN_PROPERTIES, false)
       .registerModule(new AutoMatterModule())
       .registerModule(new Jdk8Module())
+      .registerModule(new JavaTimeModule())
       .registerModule(new GuavaModule());
 
   static <T> T read(final byte[] buffer, final Class<T> cls) throws IOException {
