@@ -72,13 +72,13 @@
     <dependency>
       <groupId>io.norberg</groupId>
       <artifactId>auto-matter</artifactId>
-      <version>0.11.0</version>
+      <version>0.11.1</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>io.norberg</groupId>
       <artifactId>auto-matter-jackson</artifactId>
-      <version>0.11.0</version>
+      <version>0.11.1</version>
     </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
@@ -103,7 +103,7 @@
     <dependency>
       <groupId>com.ning</groupId>
       <artifactId>async-http-client</artifactId>
-      <version>1.9.31</version>
+      <version>1.9.32</version>
     </dependency>
     <dependency>
       <groupId>io.netty</groupId>
