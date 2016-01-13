@@ -24,6 +24,7 @@ import com.fasterxml.jackson.datatype.guava.GuavaModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 
 import io.norberg.automatter.jackson.AutoMatterModule;
@@ -42,6 +43,10 @@ class Json {
 
   static <T> T read(final byte[] buffer, final Class<T> cls) throws IOException {
     return MAPPER.readValue(buffer, cls);
+  }
+
+  static <T> T read(final InputStream stream, final Class<T> cls) throws IOException {
+    return MAPPER.readValue(stream, cls);
   }
 
   static byte[] write(final Object value) {

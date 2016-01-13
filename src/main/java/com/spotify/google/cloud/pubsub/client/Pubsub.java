@@ -19,6 +19,14 @@ package com.spotify.google.cloud.pubsub.client;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.googleapis.util.Utils;
+import com.google.api.client.http.ByteArrayContent;
+import com.google.api.client.http.GenericUrl;
+import com.google.api.client.http.HttpContent;
+import com.google.api.client.http.HttpHeaders;
+import com.google.api.client.http.HttpRequest;
+import com.google.api.client.http.HttpRequestFactory;
+import com.google.api.client.http.HttpResponse;
+import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.repackaged.com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 
@@ -42,13 +50,17 @@ import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.zip.Deflater;
 import java.util.zip.GZIPOutputStream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.util.concurrent.MoreExecutors.getExitingExecutorService;
 import static com.google.common.util.concurrent.MoreExecutors.getExitingScheduledExecutorService;
 import static com.spotify.google.cloud.pubsub.client.Subscription.canonicalSubscription;
 import static com.spotify.google.cloud.pubsub.client.Subscription.validateCanonicalSubscription;
@@ -82,16 +94,22 @@ public class Pubsub implements Closeable {
   private static final int DEFAULT_PULL_MAX_MESSAGES = 1000;
   private static final boolean DEFAULT_PULL_RETURN_IMMEDIATELY = true;
 
+  private final Transport transport;
+
   private final AsyncHttpClient client;
   private final String baseUri;
   private final Credential credential;
   private final CompletableFuture<Void> closeFuture = new CompletableFuture<>();
 
-  private final ScheduledExecutorService executor = getExitingScheduledExecutorService(
+  private final ScheduledExecutorService scheduler = getExitingScheduledExecutorService(
       new ScheduledThreadPoolExecutor(1));
 
-  private volatile String accessToken;
+  private final ExecutorService executor = getExitingExecutorService(
+      (ThreadPoolExecutor) Executors.newCachedThreadPool());
+
   private final int compressionLevel;
+
+  private volatile String accessToken;
 
   private Pubsub(final Builder builder) {
     final AsyncHttpClientConfig config = builder.clientConfig.build();
@@ -134,7 +152,7 @@ public class Pubsub implements Closeable {
     }
 
     // Wake up every 10 seconds to check if access token has expired
-    executor.scheduleAtFixedRate(this::refreshAccessToken, 10, 10, SECONDS);
+    scheduler.scheduleAtFixedRate(this::refreshAccessToken, 10, 10, SECONDS);
   }
 
   private Credential scoped(final Credential credential) {
@@ -165,7 +183,7 @@ public class Pubsub implements Closeable {
    */
   @Override
   public void close() {
-    executor.shutdown();
+    scheduler.shutdown();
     client.close();
     closeFuture.complete(null);
   }
@@ -784,6 +802,80 @@ public class Pubsub implements Closeable {
           future.fail(e);
         }
         return null;
+      }
+    });
+
+    return future;
+  }
+
+  /**
+   * Make an HTTP request using {@link java.net.HttpURLConnection}.
+   */
+  private <T> PubsubFuture<T> requestJavaNet(
+      final String operation, final HttpMethod method, final String path,
+      final Class<T> responseClass, final Object payload) {
+
+    final NetHttpTransport transport = new NetHttpTransport();
+    final HttpRequestFactory requestFactory = transport.createRequestFactory();
+
+    final String uri = baseUri + path;
+
+    final HttpHeaders headers = new HttpHeaders();
+    final HttpRequest request;
+    try {
+      request = requestFactory.buildRequest(method.getName(), new GenericUrl(URI.create(uri)), null);
+    } catch (IOException e) {
+      throw Throwables.propagate(e);
+    }
+
+    final long payloadSize;
+    final HttpContent content;
+    if (payload != NO_PAYLOAD) {
+      final byte[] json = gzipJson(payload);
+      payloadSize = json.length;
+      headers.setContentEncoding(GZIP);
+      headers.setContentLength((long) json.length);
+      headers.setContentType(APPLICATION_JSON_UTF8);
+      request.setContent(new ByteArrayContent(APPLICATION_JSON_UTF8, json));
+    } else {
+      payloadSize = 0;
+    }
+
+    request.setHeaders(headers);
+
+    final PubsubFuture<T> future = new PubsubFuture<>(operation, method.toString(), uri, payloadSize);
+
+    executor.execute(() -> {
+      final HttpResponse response;
+      try {
+        response = request.execute();
+      } catch (IOException e) {
+        future.fail(e);
+        return;
+      }
+
+      // Return null for 404'd GET & DELETE requests
+      if (response.getStatusCode() == 404 && method == HttpMethod.GET || method == HttpMethod.DELETE) {
+        future.succeed(null);
+        return;
+      }
+
+      // Fail on non-2xx responses
+      final int statusCode = response.getStatusCode();
+      if (!(statusCode >= 200 && statusCode < 300)) {
+        future.fail(new RequestFailedException(response.getStatusCode(), response.getStatusMessage()));
+        return;
+      }
+
+      if (responseClass == Void.class) {
+        future.succeed(null);
+        return;
+      }
+
+      try {
+        future.succeed(Json.read(response.getContent(), responseClass));
+      } catch (IOException e) {
+        future.fail(e);
       }
     });
 
