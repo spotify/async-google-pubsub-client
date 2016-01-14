@@ -57,6 +57,8 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.zip.Deflater;
 import java.util.zip.GZIPOutputStream;
 
+import javax.net.ssl.SSLSocketFactory;
+
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.util.concurrent.MoreExecutors.getExitingExecutorService;
@@ -131,7 +133,13 @@ public class Pubsub implements Closeable {
     log.debug("user agent: {}", config.getUserAgent());
     log.debug("max request retry: {}", config.getMaxRequestRetry());
 
-    this.transport = new NetHttpTransport();
+    final SSLSocketFactory sslSocketFactory =
+        new ConfigurableSSLSocketFactory(config.getEnabledCipherSuites(),
+                                         (SSLSocketFactory) SSLSocketFactory.getDefault());
+
+    this.transport = new NetHttpTransport.Builder()
+        .setSslSocketFactory(sslSocketFactory)
+        .build();
 
     this.client = new AsyncHttpClient(config);
 
