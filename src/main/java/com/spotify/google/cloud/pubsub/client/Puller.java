@@ -27,7 +27,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -63,6 +63,10 @@ public class Puller implements Closeable {
   private final MessageHandler handler;
   private final int concurrency;
   private final int batchSize;
+  private final int maxOutstandingMessages;
+
+  private final AtomicInteger outstandingRequests = new AtomicInteger();
+  private final AtomicInteger outstandingMessages = new AtomicInteger();
 
   public Puller(final Builder builder) {
     this.pubsub = Objects.requireNonNull(builder.pubsub, "pubsub");
@@ -71,6 +75,7 @@ public class Puller implements Closeable {
     this.handler = Objects.requireNonNull(builder.handler, "handler");
     this.concurrency = builder.concurrency;
     this.batchSize = builder.batchSize;
+    this.maxOutstandingMessages = builder.maxOutstandingMessages;
 
     // Set up a batching acker for sending acks
     this.acker = Acker.builder()
@@ -81,10 +86,11 @@ public class Puller implements Closeable {
         .concurrency(concurrency)
         .build();
 
-    // Start concurrent pulling
-    for (int i = 0; i < concurrency; i++) {
-      pull();
-    }
+    // Start pulling
+    pull();
+
+    // Schedule pulling to compensate for failures and exceeding the outstanding message limit
+    scheduler.scheduleWithFixedDelay(this::pull, 1, 1, SECONDS);
   }
 
   @Override
@@ -97,18 +103,59 @@ public class Puller implements Closeable {
     }
   }
 
+  public int maxOutstandingMessages() {
+    return maxOutstandingMessages;
+  }
+
+  public int outstandingMessages() {
+    return outstandingMessages.get();
+  }
+
+  public int concurrency() {
+    return concurrency;
+  }
+
+  public int outstandingRequests() {
+    return outstandingRequests.get();
+  }
+
+  public int batchSize() {
+    return batchSize;
+  }
+
+  public String subscription() {
+    return subscription;
+  }
+
+  public String project() {
+    return project;
+  }
+
   private void pull() {
+    while (outstandingRequests.get() < concurrency &&
+           outstandingMessages.get() < maxOutstandingMessages) {
+      pullBatch();
+    }
+  }
+
+  private void pullBatch() {
+
+    outstandingRequests.incrementAndGet();
+
     pubsub.pull(project, subscription, false, batchSize)
         .whenComplete((messages, ex) -> {
 
-          // Schedule a retry if the pull failed
+          outstandingRequests.decrementAndGet();
+
+          // Bail if pull failed
           if (ex != null) {
-            // TODO (dano): exponential backoff
-            scheduler.schedule(this::pull, 1, TimeUnit.SECONDS);
             return;
           }
 
-          // Kick off another pull
+          // Add entire batch to outstanding message count
+          outstandingMessages.addAndGet(messages.size());
+
+          // Trigger another pull
           pull();
 
           // Call handler for each received message
@@ -117,16 +164,23 @@ public class Puller implements Closeable {
             try {
               handlerFuture = handler.handleMessage(this, subscription, message.message(), message.ackId());
             } catch (Exception e) {
+              outstandingMessages.decrementAndGet();
               log.error("Message handler threw exception", e);
               continue;
             }
 
             if (handlerFuture == null) {
+              outstandingMessages.decrementAndGet();
               log.error("Message handler returned null");
               continue;
             }
 
-            // Ack when the message handling is complete
+            // Decrement the number of outstanding messages when handling is complete
+            handlerFuture.whenComplete((ignore, e) -> {
+              outstandingMessages.decrementAndGet();
+            });
+
+            // Ack when the message handling successfully completes
             handlerFuture.thenAccept(acker::acknowledge);
           }
         });
@@ -150,6 +204,7 @@ public class Puller implements Closeable {
     private MessageHandler handler;
     private int concurrency = 64;
     private int batchSize = 1000;
+    private int maxOutstandingMessages = 64_000;
 
     /**
      * Set the {@link Pubsub} client to use. The client will be closed when this {@link Puller} is closed.
@@ -199,6 +254,15 @@ public class Puller implements Closeable {
      */
     public Builder batchSize(final int batchSize) {
       this.batchSize = batchSize;
+      return this;
+    }
+
+    /**
+     * Set the limit of outstanding messages pending handling. Pulling is throttled when this limit is hit. Default is
+     * {@code 64000}.
+     */
+    public Builder maxOutstandingMessages(final int maxOutstandingMessages) {
+      this.maxOutstandingMessages = maxOutstandingMessages;
       return this;
     }
 

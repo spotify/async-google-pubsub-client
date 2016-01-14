@@ -48,6 +48,8 @@ import static org.mockito.Mockito.when;
 public class PullerTest {
 
   private static final String BASE_URI = "https://mock-pubsub/v1/";
+  private static final String SUBSCRIPTION = "test-subscription";
+  private static final String PROJECT = "test-project";
 
   @Mock Pubsub pubsub;
 
@@ -70,10 +72,29 @@ public class PullerTest {
   }
 
   @Test
+  public void testConfigurationGetters() throws Exception {
+    puller = Puller.builder()
+        .project(PROJECT)
+        .subscription(SUBSCRIPTION)
+        .pubsub(pubsub)
+        .messageHandler(handler)
+        .concurrency(3)
+        .maxOutstandingMessages(4)
+        .batchSize(5)
+        .build();
+
+    assertThat(puller.concurrency(), is(3));
+    assertThat(puller.maxOutstandingMessages(), is(4));
+    assertThat(puller.batchSize(), is(5));
+    assertThat(puller.subscription(), is(SUBSCRIPTION));
+    assertThat(puller.project(), is(PROJECT));
+  }
+
+  @Test
   public void testPulling() throws Exception {
     puller = Puller.builder()
-        .project("test")
-        .subscription("subscription")
+        .project(PROJECT)
+        .subscription(SUBSCRIPTION)
         .pubsub(pubsub)
         .messageHandler(handler)
         .concurrency(2)
@@ -89,6 +110,8 @@ public class PullerTest {
     final Request r1 = requestQueue.take();
     final Request r2 = requestQueue.take();
 
+    assertThat(puller.outstandingRequests(), is(2));
+
     // Verify that concurrency limit is not exceeded
     final Request unexpected = requestQueue.poll(1, SECONDS);
     assertThat(unexpected, is(nullValue()));
@@ -103,12 +126,65 @@ public class PullerTest {
     // Verify that another request is made
     final Request r3 = requestQueue.take();
 
+    assertThat(puller.outstandingRequests(), is(2));
+
     // Complete second request
     final List<ReceivedMessage> b2 = asList(ReceivedMessage.of("i3", "m3"),
                                             ReceivedMessage.of("i4", "m4"));
     r2.future.succeed(b2);
     verify(handler, timeout(1000)).handleMessage(puller, "subscription", b2.get(0).message(), b2.get(0).ackId());
     verify(handler, timeout(1000)).handleMessage(puller, "subscription", b2.get(1).message(), b2.get(1).ackId());
+  }
+
+  @Test
+  public void testMaxOutstandingMessagesLimit() throws Exception {
+    puller = Puller.builder()
+        .project(PROJECT)
+        .subscription(SUBSCRIPTION)
+        .pubsub(pubsub)
+        .messageHandler(handler)
+        .maxOutstandingMessages(3)
+        .concurrency(2)
+        .build();
+
+    final BlockingQueue<CompletableFuture<Void>> futures = new LinkedBlockingQueue<>();
+
+    when(handler.handleMessage(any(Puller.class), any(String.class), any(Message.class), anyString()))
+        .thenAnswer(invocation -> {
+          final CompletableFuture<Void> f = new CompletableFuture<>();
+          futures.add(f);
+          final String ackId = invocation.getArgumentAt(3, String.class);
+          return f.thenApply(ignore -> ackId);
+        });
+
+    final Request r1 = requestQueue.take();
+    final Request r2 = requestQueue.take();
+
+    assertThat(puller.outstandingRequests(), is(2));
+
+    // Complete requests without immediately handling messages
+    final List<ReceivedMessage> b1 = asList(ReceivedMessage.of("i1", "m1"),
+                                            ReceivedMessage.of("i2", "m2"),
+                                            ReceivedMessage.of("i3", "m3"),
+                                            ReceivedMessage.of("i4", "m4"));
+    r1.future.succeed(b1);
+
+    // Verify that no new request are made until messages are handled
+    assertThat(requestQueue.poll(1, SECONDS), is(nullValue()));
+    assertThat(puller.outstandingRequests(), is(1));
+    assertThat(puller.outstandingMessages(), is(4));
+
+    // Complete handling of a single message and verify no pull is made
+    futures.take().complete(null);
+    assertThat(requestQueue.poll(1, SECONDS), is(nullValue()));
+    assertThat(puller.outstandingRequests(), is(1));
+    assertThat(puller.outstandingMessages(), is(3));
+
+    // Complete handling of another message and verify that a pull request is made
+    futures.take().complete(null);
+    final Request r3 = requestQueue.take();
+    assertThat(puller.outstandingRequests(), is(2));
+    assertThat(puller.outstandingMessages(), is(2));
   }
 
   private void setUpPubsubClient() {

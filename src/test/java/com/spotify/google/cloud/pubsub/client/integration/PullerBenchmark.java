@@ -18,6 +18,7 @@ package com.spotify.google.cloud.pubsub.client.integration;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.services.pubsub.PubsubScopes;
+import com.google.common.base.Joiner;
 
 import com.spotify.google.cloud.pubsub.client.Message;
 import com.spotify.google.cloud.pubsub.client.Pubsub;
@@ -61,6 +62,8 @@ public class PullerBenchmark {
 
     LoggingConfigurator.configureDefaults("benchmark", WARN);
 
+    System.setProperty("https.cipherSuites", Joiner.on(',').join(Util.nonGcmCiphers()));
+
     final String subscription = System.getenv("GOOGLE_PUBSUB_SUBSCRIPTION");
     if (subscription == null) {
       System.err.println("Please specify a subscription using the GOOGLE_PUBSUB_SUBSCRIPTION environment variable.");
@@ -83,6 +86,8 @@ public class PullerBenchmark {
 
     while (true) {
       Thread.sleep(1000);
+      System.out.println("outstanding messages: " + puller.outstandingMessages());
+      System.out.println("outstanding requests: " + puller.outstandingRequests());
     }
   }
 
