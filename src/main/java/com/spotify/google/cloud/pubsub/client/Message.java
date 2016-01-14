@@ -16,6 +16,7 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.google.common.io.BaseEncoding;
 
 import java.nio.ByteBuffer;
@@ -30,6 +31,7 @@ import io.norberg.automatter.AutoMatter;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 @AutoMatter
+@JsonIgnoreProperties(ignoreUnknown = true)
 public interface Message {
 
   String data();
