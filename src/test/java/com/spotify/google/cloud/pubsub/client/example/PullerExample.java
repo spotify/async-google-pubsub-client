@@ -16,13 +16,14 @@
 
 package com.spotify.google.cloud.pubsub.client.example;
 
-import com.spotify.google.cloud.pubsub.client.Message;
 import com.spotify.google.cloud.pubsub.client.Pubsub;
 import com.spotify.google.cloud.pubsub.client.Puller;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
+
+import static com.spotify.google.cloud.pubsub.client.Puller.MessageHandler;
+import static com.spotify.google.cloud.pubsub.client.Puller.builder;
 
 public class PullerExample {
 
@@ -30,9 +31,12 @@ public class PullerExample {
     final Pubsub pubsub = Pubsub.builder()
         .build();
 
-    final Puller.MessageHandler handler = new MyMessageHandler();
+    final MessageHandler handler = (puller, subscription, message, ackId) -> {
+      System.out.println("got message: " + message);
+      return CompletableFuture.completedFuture(ackId);
+    };
 
-    final Puller puller = Puller.builder()
+    final Puller puller = builder()
         .pubsub(pubsub)
         .project("my-google-cloud-project")
         .subscription("my-subscription")
@@ -41,13 +45,4 @@ public class PullerExample {
         .build();
   }
 
-  private static class MyMessageHandler implements Puller.MessageHandler {
-
-    @Override
-    public CompletionStage<String> handleMessage(final Puller puller, final String subscription,
-                                                 final Message message, final String ackId) {
-      System.out.println("got message: " + message);
-      return CompletableFuture.completedFuture(ackId);
-    }
-  }
 }
