@@ -73,6 +73,26 @@ final Iterable<MessageAndTopic> messageStream = incomingMessages();
 messageStream.forEach(m -> publisher.publish(m.topic, m.message));
 ```
 
+### Puller
+
+```java
+final Pubsub pubsub = Pubsub.builder()
+    .build();
+
+final MessageHandler handler = (puller, subscription, message, ackId) -> {
+  System.out.println("got message: " + message);
+  return CompletableFuture.completedFuture(ackId);
+};
+
+final Puller puller = builder()
+    .pubsub(pubsub)
+    .project("my-google-cloud-project")
+    .subscription("my-subscription")
+    .concurrency(32)
+    .messageHandler(handler)
+    .build();
+```
+
 ### `pom.xml`
 
 ```xml
