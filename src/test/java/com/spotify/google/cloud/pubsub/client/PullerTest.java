@@ -120,8 +120,8 @@ public class PullerTest {
     final List<ReceivedMessage> b1 = asList(ReceivedMessage.of("i1", "m1"),
                                             ReceivedMessage.of("i2", "m2"));
     r1.future.succeed(b1);
-    verify(handler, timeout(1000)).handleMessage(puller, "subscription", b1.get(0).message(), b1.get(0).ackId());
-    verify(handler, timeout(1000)).handleMessage(puller, "subscription", b1.get(1).message(), b1.get(1).ackId());
+    verify(handler, timeout(1000)).handleMessage(puller, SUBSCRIPTION, b1.get(0).message(), b1.get(0).ackId());
+    verify(handler, timeout(1000)).handleMessage(puller, SUBSCRIPTION, b1.get(1).message(), b1.get(1).ackId());
 
     // Verify that another request is made
     final Request r3 = requestQueue.take();
@@ -132,8 +132,8 @@ public class PullerTest {
     final List<ReceivedMessage> b2 = asList(ReceivedMessage.of("i3", "m3"),
                                             ReceivedMessage.of("i4", "m4"));
     r2.future.succeed(b2);
-    verify(handler, timeout(1000)).handleMessage(puller, "subscription", b2.get(0).message(), b2.get(0).ackId());
-    verify(handler, timeout(1000)).handleMessage(puller, "subscription", b2.get(1).message(), b2.get(1).ackId());
+    verify(handler, timeout(1000)).handleMessage(puller, SUBSCRIPTION, b2.get(0).message(), b2.get(0).ackId());
+    verify(handler, timeout(1000)).handleMessage(puller, SUBSCRIPTION, b2.get(1).message(), b2.get(1).ackId());
   }
 
   @Test
