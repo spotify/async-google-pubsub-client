@@ -47,14 +47,18 @@ class ConfigurableSSLSocketFactory extends SSLSocketFactory {
   public Socket createSocket(final Socket sock, final String host, final int port, final boolean autoClose)
       throws IOException {
     final SSLSocket s = (SSLSocket) sslSocketFactory.createSocket(sock, host, port, autoClose);
-    s.setEnabledCipherSuites(enabledCipherSuites);
+    if (enabledCipherSuites != null) {
+      s.setEnabledCipherSuites(enabledCipherSuites);
+    }
     return s;
   }
 
   @Override
   public Socket createSocket(final String host, final int port) throws IOException {
     final SSLSocket s = (SSLSocket) sslSocketFactory.createSocket(host, port);
-    s.setEnabledCipherSuites(enabledCipherSuites);
+    if (enabledCipherSuites != null) {
+      s.setEnabledCipherSuites(enabledCipherSuites);
+    }
     return s;
   }
 
@@ -62,14 +66,18 @@ class ConfigurableSSLSocketFactory extends SSLSocketFactory {
   public Socket createSocket(final String host, final int port, final InetAddress localAddress, final int localPort)
       throws IOException {
     final SSLSocket s = (SSLSocket) sslSocketFactory.createSocket(host, port, localAddress, localPort);
-    s.setEnabledCipherSuites(enabledCipherSuites);
+    if (enabledCipherSuites != null) {
+      s.setEnabledCipherSuites(enabledCipherSuites);
+    }
     return s;
   }
 
   @Override
   public Socket createSocket(final InetAddress host, final int port) throws IOException {
     final SSLSocket s = (SSLSocket) sslSocketFactory.createSocket(host, port);
-    s.setEnabledCipherSuites(enabledCipherSuites);
+    if (enabledCipherSuites != null) {
+      s.setEnabledCipherSuites(enabledCipherSuites);
+    }
     return s;
   }
 
@@ -78,7 +86,9 @@ class ConfigurableSSLSocketFactory extends SSLSocketFactory {
                              final int localPort)
       throws IOException {
     final SSLSocket s = (SSLSocket) sslSocketFactory.createSocket(host, port, localAddress, localPort);
-    s.setEnabledCipherSuites(enabledCipherSuites);
+    if (enabledCipherSuites != null) {
+      s.setEnabledCipherSuites(enabledCipherSuites);
+    }
     return s;
   }
 }
