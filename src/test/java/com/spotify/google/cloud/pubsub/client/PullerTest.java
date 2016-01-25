@@ -197,7 +197,13 @@ public class PullerTest {
           final int maxMessages = invocation.getArgumentAt(3, Integer.class);
           final String canonicalSubscription = Subscription.canonicalSubscription(project, subscription);
           final String uri = BASE_URI + canonicalSubscription + ":pull";
-          final PubsubFuture<List<ReceivedMessage>> future = new PubsubFuture<>("pull", "POST", uri, 4711);
+          final RequestInfo requestInfo = RequestInfo.builder()
+              .operation("pull")
+              .method("POST")
+              .uri(uri)
+              .payloadSize(4711)
+              .build();
+          final PubsubFuture<List<ReceivedMessage>> future = new PubsubFuture<>(requestInfo);
           requestQueue.add(new Request(future));
           return future;
         });

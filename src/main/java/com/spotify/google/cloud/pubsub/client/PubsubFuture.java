@@ -26,32 +26,26 @@ import java.util.function.Function;
 
 public class PubsubFuture<T> extends CompletableFuture<T> {
 
-  private final String operation;
-  private final String method;
-  private final String uri;
-  private final long payloadSize;
+  private final RequestInfo requestInfo;
 
-  PubsubFuture(final String operation, final String method, final String uri, final long payloadSize) {
-    this.operation = operation;
-    this.method = method;
-    this.uri = uri;
-    this.payloadSize = payloadSize;
+  PubsubFuture(final RequestInfo requestInfo) {
+    this.requestInfo = requestInfo;
   }
 
   public String operation() {
-    return operation;
+    return requestInfo.operation();
   }
 
   public String method() {
-    return method;
+    return requestInfo.method();
   }
 
   public String uri() {
-    return uri;
+    return requestInfo.uri();
   }
 
   public long payloadSize() {
-    return payloadSize;
+    return requestInfo.payloadSize();
   }
 
   @Override
@@ -276,8 +270,7 @@ public class PubsubFuture<T> extends CompletableFuture<T> {
   }
 
   private <U> PubsubFuture<U> wrap(final CompletableFuture<U> future) {
-    final PubsubFuture<U> pubsubFuture = new PubsubFuture<>(
-        operation, method, uri, payloadSize);
+    final PubsubFuture<U> pubsubFuture = new PubsubFuture<>(requestInfo);
     future.whenComplete((v, t) -> {
       if (t != null) {
         // Unwrap CompletionException (due to using whenComplete)
@@ -290,11 +283,27 @@ public class PubsubFuture<T> extends CompletableFuture<T> {
     return pubsubFuture;
   }
 
-  boolean succeed(final T value) {
+  public boolean succeed(final T value) {
     return super.complete(value);
   }
 
   public boolean fail(final Throwable ex) {
     return super.completeExceptionally(ex);
+  }
+
+  public static <T> PubsubFuture<T> of(final RequestInfo requestInfo) {
+    return new PubsubFuture<>(requestInfo);
+  }
+
+  public static <T> PubsubFuture<T> succeededFuture(final RequestInfo requestInfo, final T value) {
+    final PubsubFuture<T> future = new PubsubFuture<>(requestInfo);
+    future.succeed(value);
+    return future;
+  }
+
+  public static <T> PubsubFuture<T> failedFuture(final RequestInfo requestInfo, final Throwable t) {
+    final PubsubFuture<T> future = new PubsubFuture<>(requestInfo);
+    future.fail(t);
+    return future;
   }
 }

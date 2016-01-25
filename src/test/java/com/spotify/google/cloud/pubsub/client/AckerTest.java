@@ -175,7 +175,13 @@ public class AckerTest {
               (List<String>) invocation.getArgumentAt(2, List.class);
           final String canonicalSubscription = Subscription.canonicalSubscription(project, subscription);
           final String uri = BASE_URI + canonicalSubscription + ":acknowledge";
-          final PubsubFuture<Void> future = new PubsubFuture<>("acknowledge", "POST", uri, 4711);
+          final RequestInfo requestInfo = RequestInfo.builder()
+              .operation("acknowledge")
+              .method("POST")
+              .uri(uri)
+              .payloadSize(4711)
+              .build();
+          final PubsubFuture<Void> future = new PubsubFuture<>(requestInfo);
           requestQueue.add(new Request(ackIds, future));
           return future;
         });

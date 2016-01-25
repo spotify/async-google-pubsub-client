@@ -759,7 +759,14 @@ public class Pubsub implements Closeable {
 
     final Request request = builder.build();
 
-    final PubsubFuture<T> future = new PubsubFuture<>(operation, method.toString(), uri, payloadSize);
+    final RequestInfo requestInfo = RequestInfo.builder()
+        .operation(operation)
+        .method(method.toString())
+        .uri(uri)
+        .payloadSize(payloadSize)
+        .build();
+
+    final PubsubFuture<T> future = new PubsubFuture<>(requestInfo);
     client.executeRequest(request, new AsyncHandler<Void>() {
       private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 
@@ -855,7 +862,14 @@ public class Pubsub implements Closeable {
 
     request.setHeaders(headers);
 
-    final PubsubFuture<T> future = new PubsubFuture<>(operation, method.toString(), uri, payloadSize);
+    final RequestInfo requestInfo = RequestInfo.builder()
+        .operation(operation)
+        .method(method.toString())
+        .uri(uri)
+        .payloadSize(payloadSize)
+        .build();
+
+    final PubsubFuture<T> future = new PubsubFuture<>(requestInfo);
 
     executor.execute(() -> {
       final HttpResponse response;

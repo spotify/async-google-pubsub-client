@@ -56,10 +56,17 @@ public class PublisherFailureTest {
         .concurrency(1)
         .build();
 
+    final RequestInfo requestInfo = RequestInfo.builder()
+        .operation("publish")
+        .method("POST")
+        .uri("/publish")
+        .payloadSize(4711)
+        .build();
+
     when(pubsub.publish(anyString(), anyString(), anyListOf(Message.class)))
         .thenAnswer(invocation -> {
           final String topic = (String) invocation.getArguments()[1];
-          final PubsubFuture<List<String>> future = new PubsubFuture<>("publish", "POST", "/publish", 4711);
+          final PubsubFuture<List<String>> future = new PubsubFuture<>(requestInfo);
           final BlockingQueue<PubsubFuture<List<String>>> queue = topics.get(topic);
           queue.add(future);
           return future;

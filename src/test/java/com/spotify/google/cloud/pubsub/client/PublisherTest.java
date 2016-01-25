@@ -419,7 +419,13 @@ public class PublisherTest {
           final String topic = (String) invocation.getArguments()[1];
           @SuppressWarnings("unchecked") final List<Message> messages =
               (List<Message>) invocation.getArguments()[2];
-          final PubsubFuture<List<String>> future = new PubsubFuture<>("publish", "POST", "/publish", 4711);
+          final RequestInfo requestInfo = RequestInfo.builder()
+              .operation("publish")
+              .method("POST")
+              .uri("/publish")
+              .payloadSize(4711)
+              .build();
+          final PubsubFuture<List<String>> future = new PubsubFuture<>(requestInfo);
           final BlockingQueue<Request> queue = topics.get(topic);
           queue.add(new Request(messages, future));
           return future;
