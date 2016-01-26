@@ -20,6 +20,7 @@ import com.google.common.io.BaseEncoding;
 
 import org.junit.Test;
 
+import static com.spotify.google.cloud.pubsub.client.Message.encode;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
 
@@ -37,5 +38,18 @@ public class MessageTest {
     final String encoded = BaseEncoding.base64().encode("hello world".getBytes("UTF-8"));
     final Message message = Message.ofEncoded("hello world");
     assertThat(message.data(), is(encoded));
+  }
+
+  @Test
+  public void testDecodedData() throws Exception {
+    final byte[] data = {1, 17, -24, 127, 0, -1};
+    final Message message = Message.of(encode(data));
+    assertThat(message.decodedData(), is(data));
+  }
+
+  @Test
+  public void testDecodedDataUTF8() throws Exception {
+    final Message message = Message.ofEncoded("hello world");
+    assertThat(message.decodedDataUTF8().toString(), is("hello world"));
   }
 }

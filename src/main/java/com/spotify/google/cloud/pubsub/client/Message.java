@@ -89,4 +89,12 @@ public interface Message {
   static String encode(final byte[] data) {
     return Base64.getEncoder().encodeToString(data);
   }
+
+  default byte[] decodedData() {
+    return Base64.getDecoder().decode(data());
+  }
+
+  default CharSequence decodedDataUTF8() {
+    return UTF_8.decode(ByteBuffer.wrap(decodedData()));
+  }
 }
