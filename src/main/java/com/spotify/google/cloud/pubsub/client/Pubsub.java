@@ -508,6 +508,11 @@ public class Pubsub implements Closeable {
    */
   private PubsubFuture<List<String>> publish0(final List<Message> messages, final String canonicalTopic) {
     final String path = canonicalTopic + ":publish";
+    for (final Message message : messages) {
+      if (!message.isEncoded()) {
+        throw new IllegalArgumentException("Message data must be Base64 encoded: " + message);
+      }
+    }
     return post("publish", path, PublishRequest.of(messages), PublishResponse.class)
         .thenApply(PublishResponse::messageIds);
   }

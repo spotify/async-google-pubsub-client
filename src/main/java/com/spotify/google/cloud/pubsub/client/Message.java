@@ -16,6 +16,7 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
+import com.google.common.base.CharMatcher;
 import com.google.common.io.BaseEncoding;
 
 import java.nio.ByteBuffer;
@@ -31,6 +32,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 @AutoMatter
 public interface Message {
+
+  CharMatcher BASE64_MATCHER = CharMatcher.anyOf("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
 
   String data();
 
@@ -96,5 +99,9 @@ public interface Message {
 
   default CharSequence decodedDataUTF8() {
     return UTF_8.decode(ByteBuffer.wrap(decodedData()));
+  }
+
+  default boolean isEncoded() {
+    return BASE64_MATCHER.matchesAllOf(data());
   }
 }

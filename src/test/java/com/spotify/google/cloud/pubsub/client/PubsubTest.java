@@ -26,7 +26,9 @@ import com.squareup.okhttp.mockwebserver.RecordedRequest;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.mockito.runners.MockitoJUnitRunner;
 
@@ -58,6 +60,8 @@ import static org.mockito.Mockito.mock;
 
 @RunWith(MockitoJUnitRunner.class)
 public class PubsubTest {
+
+  @Rule public ExpectedException exception = ExpectedException.none();
 
   public static final String PROJECT = "test-project";
   public static final String TOPIC_1 = "topic-1";
@@ -359,6 +363,13 @@ public class PubsubTest {
     final Message[] messages = {Message.of("m0")};
     final String[] ids = {"id0"};
     testPublish(messages, ids);
+  }
+
+  @Test
+  public void testPublishNonBase64ShouldFail() throws Exception {
+    final Message badMessage = Message.of("foo-bar");
+    exception.expect(IllegalArgumentException.class);
+    pubsub.publish(PROJECT, TOPIC_1, badMessage);
   }
 
   @Test
