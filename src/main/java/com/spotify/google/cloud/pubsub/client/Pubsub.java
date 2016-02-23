@@ -43,6 +43,7 @@ import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.util.AsciiString;
 import io.norberg.h2client.Http2Client;
 import io.norberg.h2client.Http2Request;
 import io.norberg.h2client.Http2Response;
@@ -55,6 +56,7 @@ import static com.spotify.google.cloud.pubsub.client.Subscription.canonicalSubsc
 import static com.spotify.google.cloud.pubsub.client.Subscription.validateCanonicalSubscription;
 import static com.spotify.google.cloud.pubsub.client.Topic.canonicalTopic;
 import static com.spotify.google.cloud.pubsub.client.Topic.validateCanonicalTopic;
+import static io.netty.handler.codec.http.HttpHeaderNames.ACCEPT_ENCODING;
 import static io.netty.handler.codec.http.HttpHeaderNames.AUTHORIZATION;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_ENCODING;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
@@ -71,7 +73,7 @@ public class Pubsub implements Closeable {
 
   private static final Logger log = LoggerFactory.getLogger(Pubsub.class);
 
-  private static final String VERSION = "1.0.0";
+  private static final String VERSION = "2.0.0";
   private static final String PUBSUB_USER_AGENT =
       "Spotify-Google-Pubsub-Java-Client/" + VERSION + " (gzip)";
 
@@ -711,16 +713,17 @@ public class Pubsub implements Closeable {
       final byte[] json = gzipJson(payload);
       payloadSize = json.length;
       request = new Http2Request(method, uri, Unpooled.wrappedBuffer(json));
-      request.headers().set(CONTENT_ENCODING, GZIP);
-      request.headers().set(CONTENT_LENGTH, String.valueOf(json.length));
-      request.headers().set(CONTENT_TYPE, APPLICATION_JSON_UTF8);
+      request.header(CONTENT_ENCODING, GZIP);
+      request.header(CONTENT_LENGTH, AsciiString.of(String.valueOf(json.length)));
+      request.header(CONTENT_TYPE, AsciiString.of(APPLICATION_JSON_UTF8));
     } else {
       request = new Http2Request(method, uri);
       payloadSize = 0;
     }
 
-    request.headers().set(AUTHORIZATION, "Bearer " + accessToken);
-    request.headers().set(USER_AGENT, PUBSUB_USER_AGENT);
+    request.header(ACCEPT_ENCODING, GZIP);
+    request.header(AUTHORIZATION, AsciiString.of("Bearer " + accessToken));
+    request.header(USER_AGENT, AsciiString.of(PUBSUB_USER_AGENT));
 
     final RequestInfo requestInfo = RequestInfo.builder()
         .operation(operation)
