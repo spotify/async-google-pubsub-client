@@ -21,6 +21,7 @@ import com.google.common.io.BaseEncoding;
 import org.junit.Test;
 
 import static com.spotify.google.cloud.pubsub.client.Message.encode;
+import static com.spotify.google.cloud.pubsub.client.Message.isEncoded;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
 
@@ -55,11 +56,11 @@ public class MessageTest {
 
   @Test
   public void testIsEncoded() throws Exception {
-    assertThat(Message.of("Zg==").isEncoded(), is(true));
-    assertThat(Message.of("Zm8=").isEncoded(), is(true));
-    assertThat(Message.of("Zm8").isEncoded(), is(true));
+    assertThat(isEncoded(Message.of("Zg==")), is(true));
+    assertThat(isEncoded(Message.of("Zm8=")), is(true));
+    assertThat(isEncoded(Message.of("Zm8")), is(true));
 
-    assertThat(Message.of("räksmörgås").isEncoded(), is(false));
+    assertThat(isEncoded(Message.of("räksmörgås")), is(false));
 
   }
 }

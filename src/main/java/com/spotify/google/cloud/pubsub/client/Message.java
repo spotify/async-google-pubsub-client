@@ -101,7 +101,7 @@ public interface Message {
     return UTF_8.decode(ByteBuffer.wrap(decodedData()));
   }
 
-  default boolean isEncoded() {
-    return BASE64_MATCHER.matchesAllOf(data());
+  static boolean isEncoded(Message message) {
+    return BASE64_MATCHER.matchesAllOf(message.data());
   }
 }

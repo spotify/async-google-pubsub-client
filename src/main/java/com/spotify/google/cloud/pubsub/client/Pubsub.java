@@ -63,6 +63,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.util.concurrent.MoreExecutors.getExitingExecutorService;
 import static com.google.common.util.concurrent.MoreExecutors.getExitingScheduledExecutorService;
+import static com.spotify.google.cloud.pubsub.client.Message.isEncoded;
 import static com.spotify.google.cloud.pubsub.client.Subscription.canonicalSubscription;
 import static com.spotify.google.cloud.pubsub.client.Subscription.validateCanonicalSubscription;
 import static com.spotify.google.cloud.pubsub.client.Topic.canonicalTopic;
@@ -509,7 +510,7 @@ public class Pubsub implements Closeable {
   private PubsubFuture<List<String>> publish0(final List<Message> messages, final String canonicalTopic) {
     final String path = canonicalTopic + ":publish";
     for (final Message message : messages) {
-      if (!message.isEncoded()) {
+      if (!isEncoded(message)) {
         throw new IllegalArgumentException("Message data must be Base64 encoded: " + message);
       }
     }
