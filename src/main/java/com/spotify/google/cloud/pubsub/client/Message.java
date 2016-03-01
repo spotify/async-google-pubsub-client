@@ -33,7 +33,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 @AutoMatter
 public interface Message {
 
-  CharMatcher BASE64_MATCHER = CharMatcher.anyOf("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
+  CharMatcher BASE64_MATCHER = CharMatcher.anyOf("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=");
 
   String data();
 

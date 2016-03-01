@@ -52,4 +52,14 @@ public class MessageTest {
     final Message message = Message.ofEncoded("hello world");
     assertThat(message.decodedDataUTF8().toString(), is("hello world"));
   }
+
+  @Test
+  public void testIsEncoded() throws Exception {
+    assertThat(Message.of("Zg==").isEncoded(), is(true));
+    assertThat(Message.of("Zm8=").isEncoded(), is(true));
+    assertThat(Message.of("Zm8").isEncoded(), is(true));
+
+    assertThat(Message.of("räksmörgås").isEncoded(), is(false));
+
+  }
 }
