@@ -44,6 +44,7 @@ public class Acker implements Closeable {
   private final ConcurrentLinkedQueue<QueuedAck> queue = new ConcurrentLinkedQueue<>();
   private final AtomicBoolean scheduled = new AtomicBoolean();
   private final AtomicInteger outstanding = new AtomicInteger();
+  private final AtomicBoolean sending = new AtomicBoolean();
 
   private final Pubsub pubsub;
   private final String project;
@@ -52,8 +53,6 @@ public class Acker implements Closeable {
   private final int queueSize;
   private final long maxLatencyMs;
   private final int concurrency;
-
-  private volatile boolean pending;
 
   private Acker(final Builder builder) {
     this.pubsub = Objects.requireNonNull(builder.pubsub, "pubsub");
@@ -92,7 +91,7 @@ public class Acker implements Closeable {
     // Schedule later acking, allowing more acks to gather into a larger batch.
     if (scheduled.compareAndSet(false, true)) {
       try {
-        scheduler.schedule(this::send, maxLatencyMs, MILLISECONDS);
+        scheduler.schedule(this::scheduledSend, maxLatencyMs, MILLISECONDS);
       } catch (RejectedExecutionException ignore) {
         // Race with a call to close(). Ignore.
       }
@@ -101,49 +100,23 @@ public class Acker implements Closeable {
     return future;
   }
 
-  @Override
-  public void close() throws IOException {
-    // TODO (dano): fail outstanding futures
-    scheduler.shutdownNow();
-    try {
-      scheduler.awaitTermination(30, SECONDS);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    }
+  private void scheduledSend() {
+    scheduled.set(false);
+    send();
   }
 
   private void send() {
-    // Bail if already pending
-    if (pending) {
-      return;
-    }
-
-    // Clear the scheduled flag before sending.
-    scheduled.set(false);
-
-    final int currentOutstanding = outstanding.get();
-
-    // Below outstanding limit so we can send immediately?
-    if (currentOutstanding < concurrency) {
-      sendBatch();
-      return;
-    }
-
-    // Mark as pending for sending by the earliest available concurrent request slot
-    pending = true;
-
-    // Attempt to send pending to guard against losing a race while marking as pending.
-    sendPending();
-  }
-
-  private void sendPending() {
-    while (size.get() > 0 && outstanding.get() < concurrency) {
-      pending = false;
-      final int sent = sendBatch();
-
-      // Did we send a whole batch? Then there might be more acks in the queue. Mark as pending again.
-      if (sent == batchSize) {
-        pending = true;
+    if (sending.compareAndSet(false, true)) {
+      try {
+        // Drain queue
+        while (size.get() > 0 && outstanding.get() < concurrency) {
+          final int sent = sendBatch();
+          if (sent == 0) {
+            return;
+          }
+        }
+      } finally {
+        sending.set(false);
       }
     }
   }
@@ -193,9 +166,20 @@ public class Acker implements Closeable {
         })
 
         // When batch is complete, process pending acks.
-        .whenComplete((v, t) -> sendPending());
+        .whenComplete((v, t) -> send());
 
     return batch.size();
+  }
+
+  @Override
+  public void close() throws IOException {
+    // TODO (dano): fail outstanding futures
+    scheduler.shutdownNow();
+    try {
+      scheduler.awaitTermination(30, SECONDS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
   }
 
   /**
