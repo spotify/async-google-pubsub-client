@@ -33,6 +33,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.IntStream;
 import java.util.zip.Deflater;
 
+import static com.spotify.google.cloud.pubsub.client.integration.Util.TEST_NAME_PREFIX;
 import static com.spotify.google.cloud.pubsub.client.integration.Util.nonGcmCiphers;
 import static com.spotify.logging.LoggingConfigurator.Level.WARN;
 import static java.util.stream.Collectors.toList;
@@ -71,7 +72,7 @@ public class PublisherBenchmark {
 
     LoggingConfigurator.configureDefaults("benchmark", WARN);
 
-    final String topicPrefix = "test-topic-" + ThreadLocalRandom.current().nextInt();
+    final String topicPrefix = TEST_NAME_PREFIX + ThreadLocalRandom.current().nextInt();
 
     final List<String> topics = IntStream.range(0, 100)
         .mapToObj(i -> topicPrefix + "-" + i)

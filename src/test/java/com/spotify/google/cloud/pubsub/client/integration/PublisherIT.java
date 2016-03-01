@@ -32,6 +32,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 
+import static com.spotify.google.cloud.pubsub.client.integration.Util.TEST_NAME_PREFIX;
 import static java.lang.System.out;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.IntStream.range;
@@ -43,7 +44,7 @@ public class PublisherIT {
 
   private final String PROJECT = Util.defaultProject();
 
-  private final String TOPIC = "test-topic-" + ThreadLocalRandom.current().nextLong();
+  private final String TOPIC = TEST_NAME_PREFIX + ThreadLocalRandom.current().nextLong();
 
   private Pubsub pubsub;
   private Publisher publisher;

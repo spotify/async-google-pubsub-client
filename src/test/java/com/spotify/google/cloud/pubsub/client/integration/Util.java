@@ -33,7 +33,7 @@ import static java.lang.System.getProperty;
 
 class Util {
 
-  static final String TEST_NAME_PREFIX = "test-";
+  static final String TEST_NAME_PREFIX = "async-google-pubsub-client-test-";
 
   private static File CONFIG_PATH = new File(getProperty("user.home"), ".config");
   private static File GCLOUD_CONFIG_PATH = new File(CONFIG_PATH, "gcloud");
