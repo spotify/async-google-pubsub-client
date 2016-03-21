@@ -18,6 +18,9 @@ package com.spotify.google.cloud.pubsub.client;
 
 import com.google.common.util.concurrent.MoreExecutors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
@@ -50,6 +53,8 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * avoid (expensive and empirically observed) excessive numbers of very small batch publish requests during off-peak.
  */
 public class Publisher implements Closeable {
+
+  private static final Logger log = LoggerFactory.getLogger(Publisher.class);
 
   /**
    * A listener for monitoring operations performed by the {@link Publisher}.
@@ -288,10 +293,22 @@ public class Publisher implements Closeable {
       // Schedule this topic for later enqueuing, allowing more messages to gather into a larger batch.
       if (scheduled.compareAndSet(false, true)) {
         try {
-          scheduler.schedule(this::enqueueSend, maxLatencyMs, MILLISECONDS);
+          scheduler.schedule(this::enqueueSendWithErrorLogging, maxLatencyMs, MILLISECONDS);
         } catch (RejectedExecutionException ignore) {
           // Race with a call to close(). Ignore.
         }
+      }
+    }
+
+    /**
+     * A wrapper around enqueueSend which catches and logs any exceptions that are thrown. This is
+     * called by the executor, which will silently swallow exceptions if we don't handle them here.
+     */
+    private void enqueueSendWithErrorLogging() {
+      try {
+        enqueueSend();
+      } catch (Exception e) {
+        log.error("Error while enqueueing or sending messages on background thread", e);
       }
     }
 
