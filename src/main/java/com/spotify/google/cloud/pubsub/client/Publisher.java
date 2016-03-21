@@ -135,6 +135,7 @@ public class Publisher implements Closeable {
   private final CompletableFuture<Void> closeFuture = new CompletableFuture<>();
   private final ScheduledExecutorService scheduler =
       MoreExecutors.getExitingScheduledExecutorService(new ScheduledThreadPoolExecutor(1));
+  private final AtomicInteger schedulerQueueSize = new AtomicInteger();
 
   private Publisher(final Builder builder) {
     this.pubsub = Objects.requireNonNull(builder.pubsub, "pubsub");
@@ -191,6 +192,13 @@ public class Publisher implements Closeable {
    */
   public int outstandingRequests() {
     return outstanding.get();
+  }
+
+  /**
+   * Get the total number of scheduled requests.
+   */
+  public int scheduledQueueSize() {
+    return schedulerQueueSize.get();
   }
 
   /**
@@ -293,11 +301,20 @@ public class Publisher implements Closeable {
       // Schedule this topic for later enqueuing, allowing more messages to gather into a larger batch.
       if (scheduled.compareAndSet(false, true)) {
         try {
-          scheduler.schedule(this::enqueueSendWithErrorLogging, maxLatencyMs, MILLISECONDS);
+          scheduler.schedule(this::scheduledEnqueueSend, maxLatencyMs, MILLISECONDS);
+          schedulerQueueSize.incrementAndGet();
         } catch (RejectedExecutionException ignore) {
           // Race with a call to close(). Ignore.
         }
       }
+    }
+
+    /**
+     * Decrements the scheduled queue counter and enqueues the request.
+     */
+    private void scheduledEnqueueSend() {
+      schedulerQueueSize.decrementAndGet();
+      enqueueSendWithErrorLogging();
     }
 
     /**
