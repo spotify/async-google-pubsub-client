@@ -223,6 +223,16 @@ public class Publisher implements Closeable {
   }
 
   /**
+   * Get the current queue size for the given topic name. Returns 0 if the topic does not exist.
+   *
+   * @param topic  the topic name
+   */
+  public int topicQueueSize(final String topic) {
+    final TopicQueue topicQueue = this.topics.get(topic);
+    return topicQueue == null ? 0 : topicQueue.queue.size();
+  }
+
+  /**
    * Get the per-topic queue size.
    */
   public int queueSize() {
