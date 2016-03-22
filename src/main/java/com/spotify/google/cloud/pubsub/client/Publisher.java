@@ -324,6 +324,8 @@ public class Publisher implements Closeable {
      */
     private void scheduledEnqueueSend() {
       schedulerQueueSize.decrementAndGet();
+      // Clear the scheduled flag before enqueuing or sending.
+      scheduled.set(false);
       enqueueSendWithErrorLogging();
     }
 
@@ -343,9 +345,6 @@ public class Publisher implements Closeable {
      * Enqueue this topic for batch sending. If the request concurrency level is below the limit, send immediately.
      */
     private void enqueueSend() {
-
-      // Clear the scheduled flag before enqueuing or sending.
-      scheduled.set(false);
 
       final int currentOutstanding = outstanding.get();
 
