@@ -567,7 +567,7 @@ public class PubsubTest {
   }
 
   private void assertRequestHeaders(final RecordedRequest request) {
-    assertThat(request.getHeader(USER_AGENT), anyOf(is("Spotify Google-HTTP-Java-Client/1.20.0 (gzip)"),
+    assertThat(request.getHeader(USER_AGENT), anyOf(is("Spotify Google-HTTP-Java-Client/1.21.0 (gzip)"),
                                                     is("Spotify-Google-Pubsub-Java-Client/1.0.0 (gzip)")));
     assertThat(request.getHeader(AUTHORIZATION), is("Bearer " + ACCESS_TOKEN));
     assertThat(request.getHeader(ACCEPT_ENCODING), anyOf(is("gzip,deflate"),
