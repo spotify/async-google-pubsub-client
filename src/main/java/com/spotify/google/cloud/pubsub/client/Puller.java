@@ -64,6 +64,7 @@ public class Puller implements Closeable {
   private final int concurrency;
   private final int batchSize;
   private final int maxOutstandingMessages;
+  private final int maxAckQueueSize;
 
   private final AtomicInteger outstandingRequests = new AtomicInteger();
   private final AtomicInteger outstandingMessages = new AtomicInteger();
@@ -76,6 +77,7 @@ public class Puller implements Closeable {
     this.concurrency = builder.concurrency;
     this.batchSize = builder.batchSize;
     this.maxOutstandingMessages = builder.maxOutstandingMessages;
+    this.maxAckQueueSize = builder.maxAckQueueSize;
 
     // Set up a batching acker for sending acks
     this.acker = Acker.builder()
@@ -84,6 +86,7 @@ public class Puller implements Closeable {
         .subscription(subscription)
         .batchSize(batchSize)
         .concurrency(concurrency)
+        .queueSize(maxAckQueueSize)
         .build();
 
     // Start pulling
@@ -101,6 +104,10 @@ public class Puller implements Closeable {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
+  }
+
+  public int maxAckQueueSize() {
+    return maxAckQueueSize;
   }
 
   public int maxOutstandingMessages() {
@@ -205,6 +212,7 @@ public class Puller implements Closeable {
     private int concurrency = 64;
     private int batchSize = 1000;
     private int maxOutstandingMessages = 64_000;
+    private int maxAckQueueSize = 10 * batchSize;
 
     /**
      * Set the {@link Pubsub} client to use. The client will be closed when this {@link Puller} is closed.
@@ -263,6 +271,14 @@ public class Puller implements Closeable {
      */
     public Builder maxOutstandingMessages(final int maxOutstandingMessages) {
       this.maxOutstandingMessages = maxOutstandingMessages;
+      return this;
+    }
+
+    /**
+     * Set the max size for the queue of acks back to Google Cloud Pub/Sub. Default is {@code 10 * batchSize}.
+     */
+    public Builder maxAckQueueSize(final int maxAckQueueSize) {
+      this.maxAckQueueSize = maxAckQueueSize;
       return this;
     }
 
