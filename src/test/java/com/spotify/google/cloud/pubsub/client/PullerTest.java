@@ -81,8 +81,10 @@ public class PullerTest {
         .concurrency(3)
         .maxOutstandingMessages(4)
         .batchSize(5)
+        .maxAckQueueSize(10)
         .build();
 
+    assertThat(puller.maxAckQueueSize(), is(10));
     assertThat(puller.concurrency(), is(3));
     assertThat(puller.maxOutstandingMessages(), is(4));
     assertThat(puller.batchSize(), is(5));
