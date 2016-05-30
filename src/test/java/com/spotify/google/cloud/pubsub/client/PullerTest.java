@@ -82,6 +82,7 @@ public class PullerTest {
         .maxOutstandingMessages(4)
         .batchSize(5)
         .maxAckQueueSize(10)
+        .pullIntervalMillis(1000)
         .build();
 
     assertThat(puller.maxAckQueueSize(), is(10));
@@ -90,6 +91,7 @@ public class PullerTest {
     assertThat(puller.batchSize(), is(5));
     assertThat(puller.subscription(), is(SUBSCRIPTION));
     assertThat(puller.project(), is(PROJECT));
+    assertThat(puller.pullIntervalMillis(), is(1000L));
   }
 
   @Test
