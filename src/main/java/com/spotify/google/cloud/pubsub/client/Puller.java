@@ -29,10 +29,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class Puller implements Closeable {
-
   /**
    * A handler for received messages.
    */
@@ -65,6 +65,7 @@ public class Puller implements Closeable {
   private final int batchSize;
   private final int maxOutstandingMessages;
   private final int maxAckQueueSize;
+  private final long pullIntervalMillis;
 
   private final AtomicInteger outstandingRequests = new AtomicInteger();
   private final AtomicInteger outstandingMessages = new AtomicInteger();
@@ -78,6 +79,7 @@ public class Puller implements Closeable {
     this.batchSize = builder.batchSize;
     this.maxOutstandingMessages = builder.maxOutstandingMessages;
     this.maxAckQueueSize = builder.maxAckQueueSize;
+    this.pullIntervalMillis = builder.pullIntervalMillis;
 
     // Set up a batching acker for sending acks
     this.acker = Acker.builder()
@@ -93,7 +95,7 @@ public class Puller implements Closeable {
     pull();
 
     // Schedule pulling to compensate for failures and exceeding the outstanding message limit
-    scheduler.scheduleWithFixedDelay(this::pull, 1, 1, SECONDS);
+    scheduler.scheduleWithFixedDelay(this::pull, pullIntervalMillis, pullIntervalMillis, MILLISECONDS);
   }
 
   @Override
@@ -138,6 +140,10 @@ public class Puller implements Closeable {
     return project;
   }
 
+  public long pullIntervalMillis() {
+    return pullIntervalMillis;
+  }
+
   private void pull() {
     while (outstandingRequests.get() < concurrency &&
            outstandingMessages.get() < maxOutstandingMessages) {
@@ -146,7 +152,6 @@ public class Puller implements Closeable {
   }
 
   private void pullBatch() {
-
     outstandingRequests.incrementAndGet();
 
     pubsub.pull(project, subscription, false, batchSize)
@@ -213,6 +218,7 @@ public class Puller implements Closeable {
     private int batchSize = 1000;
     private int maxOutstandingMessages = 64_000;
     private int maxAckQueueSize = 10 * batchSize;
+    private long pullIntervalMillis = 1000;
 
     /**
      * Set the {@link Pubsub} client to use. The client will be closed when this {@link Puller} is closed.
@@ -279,6 +285,14 @@ public class Puller implements Closeable {
      */
     public Builder maxAckQueueSize(final int maxAckQueueSize) {
       this.maxAckQueueSize = maxAckQueueSize;
+      return this;
+    }
+
+    /**
+     * Set the pull interval in millis. Default is {@code 1000} millis.
+     */
+    public Builder pullIntervalMillis(final long pullIntervalMillis) {
+      this.pullIntervalMillis = pullIntervalMillis;
       return this;
     }
 
