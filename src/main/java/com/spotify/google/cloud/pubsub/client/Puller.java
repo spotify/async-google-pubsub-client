@@ -188,12 +188,18 @@ public class Puller implements Closeable {
             }
 
             // Decrement the number of outstanding messages when handling is complete
-            handlerFuture.whenComplete((ignore, e) -> {
+            handlerFuture.whenComplete((ignore, throwable) -> {
               outstandingMessages.decrementAndGet();
+              if (throwable != null) {
+                log.error("Message handling threw exception", throwable);
+              }
             });
 
             // Ack when the message handling successfully completes
-            handlerFuture.thenAccept(acker::acknowledge);
+            handlerFuture.thenAccept(acker::acknowledge).exceptionally(throwable -> {
+              log.error("Acking pubsub threw exception", throwable);
+              return null;
+            });
           }
         });
   }
