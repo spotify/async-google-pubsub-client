@@ -145,11 +145,10 @@ public class Puller implements Closeable {
   }
 
   private void pull() {
-    final int outstandingReq = outstandingRequests.get();
-    final int outstandingMes = outstandingMessages.get();
-    log.info("Pulling: OutstandingRequests: " + outstandingReq + " OutstandingMessages: " + outstandingMes);
-    while (outstandingReq < concurrency &&
-           outstandingMes < maxOutstandingMessages) {
+    log.debug("Scheduled Pulling: OutstandingRequests: " + outstandingRequests.get() +
+             " OutstandingMessages: " + outstandingMessages.get());
+    while (outstandingRequests.get() < concurrency &&
+           outstandingMessages.get() < maxOutstandingMessages) {
       pullBatch();
     }
   }
