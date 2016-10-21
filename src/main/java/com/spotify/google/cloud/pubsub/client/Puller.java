@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Objects;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -190,14 +191,16 @@ public class Puller implements Closeable {
             // Decrement the number of outstanding messages when handling is complete
             handlerFuture.whenComplete((ignore, throwable) -> {
               outstandingMessages.decrementAndGet();
-              if (throwable != null) {
+              if (throwable != null && !(throwable instanceof CancellationException)) {
                 log.error("Message handling threw exception", throwable);
               }
             });
 
             // Ack when the message handling successfully completes
             handlerFuture.thenAccept(acker::acknowledge).exceptionally(throwable -> {
-              log.error("Acking pubsub threw exception", throwable);
+              if (!(throwable instanceof CancellationException)) {
+                log.error("Acking pubsub threw exception", throwable);
+              }
               return null;
             });
           }
