@@ -189,12 +189,7 @@ public class Puller implements Closeable {
             }
 
             // Decrement the number of outstanding messages when handling is complete
-            handlerFuture.whenComplete((ignore, throwable) -> {
-              outstandingMessages.decrementAndGet();
-              if (throwable != null && !(throwable instanceof CancellationException)) {
-                log.error("Message handling threw exception", throwable);
-              }
-            });
+            handlerFuture.whenComplete((ignore, throwable) -> outstandingMessages.decrementAndGet());
 
             // Ack when the message handling successfully completes
             handlerFuture.thenAccept(acker::acknowledge).exceptionally(throwable -> {
