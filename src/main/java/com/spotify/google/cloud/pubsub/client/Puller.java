@@ -161,14 +161,12 @@ public class Puller implements Closeable {
 
           // Bail if pull failed
           if (ex != null) {
+            log.error("Pull failed", ex);
             return;
           }
 
           // Add entire batch to outstanding message count
           outstandingMessages.addAndGet(messages.size());
-
-          // Trigger another pull
-          pull();
 
           // Call handler for each received message
           for (final ReceivedMessage message : messages) {
