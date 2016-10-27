@@ -18,6 +18,7 @@ package com.spotify.google.cloud.pubsub.client;
 
 import com.google.common.util.concurrent.MoreExecutors;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,6 +71,7 @@ public class Puller implements Closeable {
 
   private final AtomicInteger outstandingRequests = new AtomicInteger();
   private final AtomicInteger outstandingMessages = new AtomicInteger();
+  private final AtomicBoolean hasData = new AtomicBoolean(true);
 
   public Puller(final Builder builder) {
     this.pubsub = Objects.requireNonNull(builder.pubsub, "pubsub");
@@ -146,8 +148,10 @@ public class Puller implements Closeable {
   }
 
   private void pull() {
+    hasData.compareAndSet(false, true);
     while (outstandingRequests.get() < concurrency &&
-           outstandingMessages.get() < maxOutstandingMessages) {
+           outstandingMessages.get() < maxOutstandingMessages &&
+           hasData.get()) {
       pullBatch();
     }
   }
@@ -155,15 +159,21 @@ public class Puller implements Closeable {
   private void pullBatch() {
     outstandingRequests.incrementAndGet();
 
-    pubsub.pull(project, subscription, false, batchSize)
+    pubsub.pull(project, subscription, true, batchSize)
         .whenComplete((messages, ex) -> {
 
           outstandingRequests.decrementAndGet();
-
           // Bail if pull failed
           if (ex != null) {
             log.error("Pull failed", ex);
             return;
+          }
+
+          if (messages.size() == 0) {
+            hasData.compareAndSet(true, false);
+            return;
+          } else {
+            hasData.compareAndSet(false, true);
           }
 
           // Add entire batch to outstanding message count
