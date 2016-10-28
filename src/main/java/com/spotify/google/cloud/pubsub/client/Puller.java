@@ -71,7 +71,6 @@ public class Puller implements Closeable {
 
   private final AtomicInteger outstandingRequests = new AtomicInteger();
   private final AtomicInteger outstandingMessages = new AtomicInteger();
-  private final AtomicBoolean hasData = new AtomicBoolean(true);
 
   public Puller(final Builder builder) {
     this.pubsub = Objects.requireNonNull(builder.pubsub, "pubsub");
@@ -148,10 +147,8 @@ public class Puller implements Closeable {
   }
 
   private void pull() {
-    hasData.compareAndSet(false, true);
     while (outstandingRequests.get() < concurrency &&
-           outstandingMessages.get() < maxOutstandingMessages &&
-           hasData.get()) {
+           outstandingMessages.get() < maxOutstandingMessages) {
       pullBatch();
     }
   }
@@ -167,13 +164,6 @@ public class Puller implements Closeable {
           if (ex != null) {
             log.error("Pull failed", ex);
             return;
-          }
-
-          if (messages.size() == 0) {
-            hasData.compareAndSet(true, false);
-            return;
-          } else {
-            hasData.compareAndSet(false, true);
           }
 
           // Add entire batch to outstanding message count
