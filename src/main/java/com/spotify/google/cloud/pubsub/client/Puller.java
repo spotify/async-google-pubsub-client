@@ -18,7 +18,9 @@ package com.spotify.google.cloud.pubsub.client;
 
 import com.google.common.util.concurrent.MoreExecutors;
 
-import java.util.concurrent.atomic.AtomicBoolean;
+
+import com.swrve.ratelimitedlogger.RateLimitedLog;
+import org.joda.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +54,15 @@ public class Puller implements Closeable {
     CompletionStage<String> handleMessage(Puller puller, String subscription, Message message, String ackId);
   }
 
-  private static final Logger log = LoggerFactory.getLogger(Puller.class);
+  private static final int MAX_LOG_RATE = 3;
+  private static final Duration MAX_LOG_DURATION = Duration.millis(2000);
+
+  private static final Logger logger = LoggerFactory.getLogger(Puller.class);
+  private static final Logger LOG = RateLimitedLog.withRateLimit(logger)
+      .maxRate(MAX_LOG_RATE)
+      .every(MAX_LOG_DURATION)
+      .build();
+
 
   private final ScheduledExecutorService scheduler =
       MoreExecutors.getExitingScheduledExecutorService(new ScheduledThreadPoolExecutor(1));
@@ -162,7 +172,7 @@ public class Puller implements Closeable {
           outstandingRequests.decrementAndGet();
           // Bail if pull failed
           if (ex != null) {
-            log.error("Pull failed", ex);
+            LOG.error("Pull failed", ex);
             return;
           }
 
@@ -176,13 +186,13 @@ public class Puller implements Closeable {
               handlerFuture = handler.handleMessage(this, subscription, message.message(), message.ackId());
             } catch (Exception e) {
               outstandingMessages.decrementAndGet();
-              log.error("Message handler threw exception", e);
+              LOG.error("Message handler threw exception", e);
               continue;
             }
 
             if (handlerFuture == null) {
               outstandingMessages.decrementAndGet();
-              log.error("Message handler returned null");
+              LOG.error("Message handler returned null");
               continue;
             }
 
@@ -192,7 +202,7 @@ public class Puller implements Closeable {
             // Ack when the message handling successfully completes
             handlerFuture.thenAccept(acker::acknowledge).exceptionally(throwable -> {
               if (!(throwable instanceof CancellationException)) {
-                log.error("Acking pubsub threw exception", throwable);
+                LOG.error("Acking pubsub threw exception", throwable);
               }
               return null;
             });
