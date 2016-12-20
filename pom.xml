@@ -115,6 +115,17 @@
       <artifactId>netty</artifactId>
       <version>3.10.5.Final</version>
     </dependency>
+    <dependency>
+      <groupId>com.swrve</groupId>
+      <artifactId>rate-limited-logger</artifactId>
+      <version>1.1.0</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.google.code.findbugs</groupId>
+          <artifactId>jsr305</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
 
     <!--test deps-->
     <dependency>
