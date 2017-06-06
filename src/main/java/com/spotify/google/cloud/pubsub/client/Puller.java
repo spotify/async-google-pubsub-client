@@ -79,6 +79,8 @@ public class Puller implements Closeable {
   private final int maxAckQueueSize;
   private final long pullIntervalMillis;
 
+  private final Backoff backoff;
+
   private final AtomicInteger outstandingRequests = new AtomicInteger();
   private final AtomicInteger outstandingMessages = new AtomicInteger();
 
@@ -92,6 +94,11 @@ public class Puller implements Closeable {
     this.maxOutstandingMessages = builder.maxOutstandingMessages;
     this.maxAckQueueSize = builder.maxAckQueueSize;
     this.pullIntervalMillis = builder.pullIntervalMillis;
+
+    this.backoff = Backoff.builder()
+        .initialInterval(builder.pullIntervalMillis)
+        .maxBackoffMultiplier(builder.maxBackoffMultiplier)
+        .build();
 
     // Set up a batching acker for sending acks
     this.acker = Acker.builder()
@@ -172,9 +179,17 @@ public class Puller implements Closeable {
           outstandingRequests.decrementAndGet();
           // Bail if pull failed
           if (ex != null) {
-            LOG.error("Pull failed", ex);
+            if ( ex instanceof RequestFailedException && ((RequestFailedException)ex).statusCode() == 429 ) {
+              LOG.debug("Going too fast, backing off");
+            } else {
+              LOG.error("Pull failed", ex);
+            }
+            backoff.sleep();
             return;
           }
+
+          // we are good. Lets go at full speed again.
+          backoff.reset();
 
           // Add entire batch to outstanding message count
           outstandingMessages.addAndGet(messages.size());
@@ -231,6 +246,7 @@ public class Puller implements Closeable {
     private int maxOutstandingMessages = 64_000;
     private int maxAckQueueSize = 10 * batchSize;
     private long pullIntervalMillis = 1000;
+    private int maxBackoffMultiplier = 0;
 
     /**
      * Set the {@link Pubsub} client to use. The client will be closed when this {@link Puller} is closed.
@@ -305,6 +321,14 @@ public class Puller implements Closeable {
      */
     public Builder pullIntervalMillis(final long pullIntervalMillis) {
       this.pullIntervalMillis = pullIntervalMillis;
+      return this;
+    }
+
+    /**
+     * Set the maximum backoff multiplier. Default is {@code 0} (no backoff).
+     */
+    public Builder maxBackoffMultiplier(final int maxBackoffMultiplier) {
+      this.maxBackoffMultiplier = maxBackoffMultiplier;
       return this;
     }
 
