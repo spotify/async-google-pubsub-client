@@ -53,6 +53,7 @@ public class Acker implements Closeable {
   private final int queueSize;
   private final long maxLatencyMs;
   private final int concurrency;
+  private final Backoff backoff;
 
   private Acker(final Builder builder) {
     this.pubsub = Objects.requireNonNull(builder.pubsub, "pubsub");
@@ -62,6 +63,11 @@ public class Acker implements Closeable {
     this.queueSize = Optional.ofNullable(builder.queueSize).orElseGet(() -> batchSize * 10);
     this.maxLatencyMs = builder.maxLatencyMs;
     this.concurrency = builder.concurrency;
+
+    this.backoff = Backoff.builder()
+        .initialInterval(builder.maxLatencyMs)
+        .maxBackoffMultiplier(builder.maxBackoffMultiplier)
+        .build();
   }
 
   public CompletableFuture<Void> acknowledge(final String ackId) {
@@ -155,8 +161,11 @@ public class Acker implements Closeable {
           // Fail all futures if the batch request failed
           if (ex != null) {
             futures.forEach(f -> f.completeExceptionally(ex));
+            backoff.sleep();
             return;
           }
+
+          backoff.reset();
 
           // Complete each future
           for (int i = 0; i < futures.size(); i++) {
@@ -216,6 +225,7 @@ public class Acker implements Closeable {
     private int batchSize = 1000;
     private Integer queueSize;
     private long maxLatencyMs = 1000;
+    private int maxBackoffMultiplier = 0;
 
     /**
      * Set the {@link Pubsub} client to use. The client will be closed when this {@link Acker} is closed.
@@ -274,6 +284,14 @@ public class Acker implements Closeable {
      */
     public Builder maxLatencyMs(final long maxLatencyMs) {
       this.maxLatencyMs = maxLatencyMs;
+      return this;
+    }
+
+    /**
+     * Set the maximum backoff multiplier. Default is {@code 0} (no backoff).
+     */
+    public Builder maxBackoffMultiplier(final int maxBackoffMultiplier) {
+      this.maxBackoffMultiplier = maxBackoffMultiplier;
       return this;
     }
 
