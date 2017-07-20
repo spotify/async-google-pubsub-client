@@ -271,19 +271,7 @@ public class Pubsub implements Closeable {
    * @param canonicalTopic The canonical (including project) name of the topic to create.
    * @return A future that is completed when this request is completed.
    */
-  public PubsubFuture<Topic> createTopic(final String canonicalTopic) {
-    return createTopic(canonicalTopic, Topic.of(canonicalTopic));
-  }
-
-  /**
-   * Create a Pub/Sub topic.
-   *
-   * @param canonicalTopic The canonical (including project) name of the topic to create.
-   * @param req            The payload of the create request. This seems to be ignore in the current API version.
-   * @return A future that is completed when this request is completed.
-   */
-  private PubsubFuture<Topic> createTopic(final String canonicalTopic,
-                                          final Topic req) {
+  private PubsubFuture<Topic> createTopic(final String canonicalTopic) {
     validateCanonicalTopic(canonicalTopic);
     return put("create topic", canonicalTopic, NO_PAYLOAD, Topic.class);
   }
@@ -760,6 +748,7 @@ public class Pubsub implements Closeable {
       builder.setHeader(CONTENT_TYPE, APPLICATION_JSON_UTF8);
       builder.setBody(json);
     } else {
+      builder.setHeader(CONTENT_LENGTH, String.valueOf(0));
       payloadSize = 0;
     }
 

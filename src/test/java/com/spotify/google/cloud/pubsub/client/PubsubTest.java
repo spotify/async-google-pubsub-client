@@ -190,15 +190,13 @@ public class PubsubTest {
     assertThat(future.operation(), is("create topic"));
     assertThat(future.method(), is("PUT"));
     assertThat(future.uri(), is(server.getUrl(expectedPath).toString()));
-    assertThat(future.payloadSize(), is(greaterThan(0L)));
+    assertThat(future.payloadSize(), is(0L));
 
     final RecordedRequest request = server.takeRequest(10, SECONDS);
 
     assertThat(request.getMethod(), is("PUT"));
     assertThat(request.getPath(), is(expectedPath));
-    assertThat(request.getHeader(CONTENT_ENCODING), is("gzip"));
-    assertThat(request.getHeader(CONTENT_LENGTH), is(String.valueOf(future.payloadSize())));
-    assertThat(request.getHeader(CONTENT_TYPE), is("application/json; charset=UTF-8"));
+    assertThat(request.getHeader(CONTENT_LENGTH), is(String.valueOf(0)));
     assertRequestHeaders(request);
 
     final Topic response = Topic.of(PROJECT, TOPIC_1);
