@@ -136,7 +136,7 @@ public class Pubsub implements Closeable {
 
     final SSLSocketFactory sslSocketFactory =
         new ConfigurableSSLSocketFactory(config.getEnabledCipherSuites(),
-                                         (SSLSocketFactory) SSLSocketFactory.getDefault());
+            (SSLSocketFactory) SSLSocketFactory.getDefault());
 
     this.transport = new NetHttpTransport.Builder()
         .setSslSocketFactory(sslSocketFactory)
@@ -285,7 +285,7 @@ public class Pubsub implements Closeable {
   private PubsubFuture<Topic> createTopic(final String canonicalTopic,
                                           final Topic req) {
     validateCanonicalTopic(canonicalTopic);
-    return put("create topic", canonicalTopic, req, Topic.class);
+    return put("create topic", canonicalTopic, NO_PAYLOAD, Topic.class);
   }
 
   /**
@@ -410,7 +410,7 @@ public class Pubsub implements Closeable {
   private PubsubFuture<Subscription> createSubscription(final String canonicalSubscriptionName,
                                                         final Subscription subscription) {
     validateCanonicalSubscription(canonicalSubscriptionName);
-    return put("create subscription", canonicalSubscriptionName, subscription, Subscription.class);
+    return put("create subscription", canonicalSubscriptionName, subscription.toRequest(), Subscription.class);
   }
 
   /**
