@@ -16,15 +16,14 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
-import java.util.Optional;
-import java.util.regex.Pattern;
-
-import io.norberg.automatter.AutoMatter;
-
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.spotify.google.cloud.pubsub.client.Topic.canonicalTopic;
 import static com.spotify.google.cloud.pubsub.client.Topic.validateCanonicalTopic;
+
+import io.norberg.automatter.AutoMatter;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
 @AutoMatter
 public interface Subscription {
@@ -59,12 +58,19 @@ public interface Subscription {
   static String canonicalSubscription(final String project, final String subscription) {
     checkArgument(!isNullOrEmpty(project) && !project.contains("/"), "illegal project: %s", project);
     checkArgument(!isNullOrEmpty(subscription) && !subscription.contains("/") && !subscription.startsWith("goog"),
-                  "illegal subscription: %s", subscription);
+        "illegal subscription: %s", subscription);
     return PROJECTS + '/' + project + '/' + SUBSCRIPTIONS + '/' + subscription;
   }
 
   static void validateCanonicalSubscription(final String canonicalSubscription) {
     checkArgument(PATTERN.matcher(canonicalSubscription).matches(), "malformed subscription: %s",
-                  canonicalSubscription);
+        canonicalSubscription);
   }
+
+  default SubscriptionCreateRequest toRequest() {
+    return new SubscriptionCreateRequestBuilder().topic(topic()).pushConfig(pushConfig()).ackDeadlineSeconds(ackDeadlineSeconds()).build();
+  }
+
+
 }
+
