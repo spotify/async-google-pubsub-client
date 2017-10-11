@@ -17,27 +17,16 @@
 package com.spotify.google.cloud.pubsub.client.integration;
 
 import com.google.api.client.repackaged.com.google.common.base.Throwables;
-import com.google.common.base.Splitter;
-
-import java.io.File;
+import com.google.common.io.CharStreams;
 import java.io.IOException;
-import java.nio.file.Files;
+import java.io.InputStreamReader;
 import java.security.NoSuchAlgorithmException;
-import java.util.List;
 import java.util.stream.Stream;
-
 import javax.net.ssl.SSLContext;
-
-import static com.google.common.base.CharMatcher.WHITESPACE;
-import static java.lang.System.getProperty;
 
 class Util {
 
   static final String TEST_NAME_PREFIX = "async-google-pubsub-client-test-";
-
-  private static File CONFIG_PATH = new File(getProperty("user.home"), ".config");
-  private static File GCLOUD_CONFIG_PATH = new File(CONFIG_PATH, "gcloud");
-  private static File PROPERTIES_PATH = new File(GCLOUD_CONFIG_PATH, "properties");
 
   private static String defaultProject = System.getenv("GOOGLE_CLOUD_PROJECT");
 
@@ -47,22 +36,16 @@ class Util {
       return defaultProject;
     }
 
-    // Try reading $HOME/.config/gcloud/properties
-
-    final List<String> lines;
+    // Try asking gcloud
     try {
-      lines = Files.readAllLines(PROPERTIES_PATH.toPath());
+      Process process = Runtime.getRuntime().exec("gcloud config get-value project");
+      defaultProject = CharStreams.toString(new InputStreamReader(process.getInputStream())).trim();
     } catch (IOException e) {
-      throw new RuntimeException("failed to get default project");
+      throw new RuntimeException("failed to get default project", e);
     }
 
-    defaultProject = lines.stream()
-        .filter(line -> line.contains("project")).findFirst()
-        .map(line -> Splitter.on(WHITESPACE).splitToList(line))
-        .map(tokens -> tokens.size() > 2 ? tokens.get(2) : "").orElse("");
-
-    if (defaultProject == null) {
-      throw new RuntimeException("failed to get default project");
+    if (defaultProject.isEmpty()) {
+      throw new RuntimeException("got empty default project");
     }
 
     return defaultProject;
