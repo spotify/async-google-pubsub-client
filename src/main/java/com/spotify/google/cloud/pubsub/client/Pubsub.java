@@ -398,7 +398,8 @@ public class Pubsub implements Closeable {
   private PubsubFuture<Subscription> createSubscription(final String canonicalSubscriptionName,
                                                         final Subscription subscription) {
     validateCanonicalSubscription(canonicalSubscriptionName);
-    return put("create subscription", canonicalSubscriptionName, subscription.toRequest(), Subscription.class);
+    return put("create subscription", canonicalSubscriptionName, SubscriptionCreateRequest.of(subscription),
+        Subscription.class);
   }
 
   /**

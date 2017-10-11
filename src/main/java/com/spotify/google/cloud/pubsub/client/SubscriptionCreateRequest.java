@@ -4,7 +4,7 @@ import io.norberg.automatter.AutoMatter;
 import java.util.Optional;
 
 @AutoMatter
-public interface SubscriptionCreateRequest {
+interface SubscriptionCreateRequest {
 
   String topic();
 
@@ -12,4 +12,15 @@ public interface SubscriptionCreateRequest {
 
   Optional<Integer> ackDeadlineSeconds();
 
+  static SubscriptionCreateRequestBuilder builder() {
+    return new SubscriptionCreateRequestBuilder();
+  }
+
+  static SubscriptionCreateRequest of(Subscription subscription) {
+    return builder()
+        .topic(subscription.topic())
+        .pushConfig(subscription.pushConfig())
+        .ackDeadlineSeconds(subscription.ackDeadlineSeconds())
+        .build();
+  }
 }

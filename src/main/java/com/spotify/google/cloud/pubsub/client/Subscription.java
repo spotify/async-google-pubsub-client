@@ -66,11 +66,5 @@ public interface Subscription {
     checkArgument(PATTERN.matcher(canonicalSubscription).matches(), "malformed subscription: %s",
         canonicalSubscription);
   }
-
-  default SubscriptionCreateRequest toRequest() {
-    return new SubscriptionCreateRequestBuilder().topic(topic()).pushConfig(pushConfig()).ackDeadlineSeconds(ackDeadlineSeconds()).build();
-  }
-
-
 }
 
