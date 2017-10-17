@@ -271,7 +271,7 @@ public class PubsubFuture<T> extends CompletableFuture<T> {
 
   @Override
   public PubsubFuture<T> toCompletableFuture() {
-    return wrap(super.toCompletableFuture());
+    return this;
   }
 
   @Override
