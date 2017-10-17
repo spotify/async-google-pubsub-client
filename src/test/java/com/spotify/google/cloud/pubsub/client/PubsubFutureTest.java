@@ -59,4 +59,16 @@ public class PubsubFutureTest {
 
     f2.get();
   }
+
+  @Test
+  public void testToCompletableFutureResultPropagation() throws Exception {
+    final PubsubFuture<String> f1 = new PubsubFuture<>(requestInfo);
+    final PubsubFuture<String> f2 = f1.toCompletableFuture();
+
+    final String value = "foo";
+
+    f1.succeed(value);
+
+    assertThat(f2.get(), is(value));
+  }
 }
