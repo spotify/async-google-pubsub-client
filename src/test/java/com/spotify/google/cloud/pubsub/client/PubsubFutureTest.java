@@ -20,15 +20,12 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
+import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
-import static org.junit.Assert.fail;
 
-import java.io.IOException;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import org.hamcrest.Matchers;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -70,5 +67,27 @@ public class PubsubFutureTest {
     f1.succeed(value);
 
     assertThat(f2.get(), is(value));
+  }
+
+  @Test
+  public void testCompletionExceptionPropagation() throws Exception {
+    final PubsubFuture<String> f1 = new PubsubFuture<>(requestInfo);
+    final PubsubFuture<String> f2 = f1.thenApply(r -> r);
+
+    final AtomicReference<Throwable> whenCompleteThrowable = new AtomicReference<>();
+    f2.whenComplete((v, t) -> whenCompleteThrowable.set(t));
+
+    final Exception cause = new Exception();
+    f1.fail(cause);
+
+    assertThat(f2.isDone(), is(true));
+    assertThat(f2.isCompletedExceptionally(), is(true));
+
+    assertThat(whenCompleteThrowable.get(), instanceOf(CompletionException.class));
+    assertThat(whenCompleteThrowable.get().getCause(), is(cause));
+
+    exception.expectCause(is(cause));
+
+    f2.get();
   }
 }
