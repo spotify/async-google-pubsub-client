@@ -37,6 +37,7 @@
 package com.spotify.google.cloud.pubsub.client;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
@@ -293,9 +294,14 @@ public class PubsubFuture<T> extends CompletableFuture<T> {
     final PubsubFuture<U> pubsubFuture = new PubsubFuture<>(requestInfo);
     future.whenComplete((v, t) -> {
       if (t != null) {
-        // Unwrap CompletionException (due to using whenComplete)
-        final Throwable cause = t.getCause();
-        pubsubFuture.fail(cause);
+        final Throwable thrown;
+        if (t instanceof CompletionException) {
+          // Unwrap CompletionException (due to using whenComplete)
+          thrown = t.getCause();
+        } else {
+          thrown = t;
+        }
+        pubsubFuture.fail(thrown);
       } else {
         pubsubFuture.succeed(v);
       }
