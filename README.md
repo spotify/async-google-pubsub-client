@@ -99,7 +99,7 @@ final Puller puller = builder()
 <dependency>
   <groupId>com.spotify</groupId>
   <artifactId>async-google-pubsub-client</artifactId>
-  <version>1.28</version>
+  <version>1.31</version>
 </dependency>
 ```
 
