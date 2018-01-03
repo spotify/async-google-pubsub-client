@@ -145,6 +145,7 @@ public class Puller implements Closeable {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
+    acker.close();
   }
 
   public int maxAckQueueSize() {

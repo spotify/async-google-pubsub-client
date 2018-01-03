@@ -209,6 +209,7 @@ public class Acker implements Closeable {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
+    pubsub.close();
   }
 
   /**

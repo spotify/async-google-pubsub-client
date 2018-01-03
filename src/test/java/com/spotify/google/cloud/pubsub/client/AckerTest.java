@@ -36,24 +36,6 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
-import com.google.common.collect.ImmutableSet;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
-
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-
 import static com.google.common.collect.Iterables.concat;
 import static java.util.concurrent.TimeUnit.DAYS;
 import static java.util.stream.Collectors.toList;
@@ -70,6 +52,22 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import com.google.common.collect.ImmutableSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
 
 @RunWith(MockitoJUnitRunner.class)
 public class AckerTest {
@@ -183,6 +181,17 @@ public class AckerTest {
     assertThat(r1b, is(notNullValue()));
     final Set<String> r1received = ImmutableSet.copyOf(concat(r1a.ids, r1b.ids));
     assertThat(r1received, is(ImmutableSet.copyOf(m1)));
+  }
+
+  @Test
+  public void verifyCloseWillClosePubsubClient() throws Exception {
+    acker = Acker.builder()
+        .project("test")
+        .subscription("subscription")
+        .pubsub(pubsub)
+        .build();
+    acker.close();
+    verify(pubsub).close();
   }
 
   private void setUpPubsubClient() {
