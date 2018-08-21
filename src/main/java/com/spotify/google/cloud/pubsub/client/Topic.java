@@ -36,6 +36,8 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
+import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 import io.norberg.automatter.AutoMatter;
@@ -52,6 +54,8 @@ public interface Topic {
   String TOPICS = "topics";
 
   String name();
+
+  Optional<Map<String, String>> labels();
 
   static TopicBuilder builder() {
     return new TopicBuilder();

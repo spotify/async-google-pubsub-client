@@ -42,6 +42,7 @@ import static com.spotify.google.cloud.pubsub.client.Topic.canonicalTopic;
 import static com.spotify.google.cloud.pubsub.client.Topic.validateCanonicalTopic;
 
 import io.norberg.automatter.AutoMatter;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -56,6 +57,8 @@ public interface Subscription {
   String name();
 
   String topic();
+
+  Optional<Map<String, String>> labels();
 
   Optional<PushConfig> pushConfig();
 
