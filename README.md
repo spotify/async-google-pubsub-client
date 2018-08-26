@@ -1,3 +1,5 @@
+**NOTE: This library is sunsetting. Please consider using the official [Google Cloud Java Client for Pub/Sub](https://github.com/GoogleCloudPlatform/google-cloud-java/tree/master/google-cloud-clients/google-cloud-pubsub).**
+
 async-google-pubsub-client
 ==========================
 
