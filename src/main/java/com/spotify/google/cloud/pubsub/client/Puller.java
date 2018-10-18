@@ -224,6 +224,9 @@ public class Puller implements Closeable {
               outstandingMessages.decrementAndGet();
               LOG.error("Message handler threw exception", e);
               continue;
+            } catch (Error e) {
+              outstandingMessages.decrementAndGet();
+              throw e;
             }
 
             if (handlerFuture == null) {
