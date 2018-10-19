@@ -216,16 +216,20 @@ public class Puller implements Closeable {
           outstandingMessages.addAndGet(messages.size());
 
           // Call handler for each received message
-          for (final ReceivedMessage message : messages) {
+          for (int i = 0; i < messages.size(); i++) {
             final CompletionStage<String> handlerFuture;
             try {
+              final ReceivedMessage message = messages.get(i);
               handlerFuture = handler.handleMessage(this, subscription, message.message(), message.ackId());
             } catch (Exception e) {
               outstandingMessages.decrementAndGet();
               LOG.error("Message handler threw exception", e);
               continue;
             } catch (Error e) {
-              outstandingMessages.decrementAndGet();
+              // Errors are not necessarily safe to swallow, EG ThreadDeath, but we do still need to decrement the
+              // outstanding message count appropriately. Re-throwing the error will break the for loop, so decrement
+              // for this message and all subsequent ones.
+              outstandingMessages.addAndGet(i - messages.size());
               throw e;
             }
 
