@@ -220,9 +220,9 @@ public class Puller implements Closeable {
             final CompletionStage<String> handlerFuture;
             try {
               handlerFuture = handler.handleMessage(this, subscription, message.message(), message.ackId());
-            } catch (Exception e) {
+            } catch (Throwable t) {
               outstandingMessages.decrementAndGet();
-              LOG.error("Message handler threw exception", e);
+              LOG.error("Message handler threw exception", t);
               continue;
             }
 
