@@ -38,6 +38,7 @@ package com.spotify.google.cloud.pubsub.client;
 
 import static java.util.Arrays.asList;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.awaitility.Awaitility.await;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertThat;
@@ -50,16 +51,17 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
+import java.util.function.Supplier;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
@@ -73,8 +75,6 @@ public class PullerTest {
   @Mock Pubsub pubsub;
 
   @Mock Puller.MessageHandler handler;
-
-  @Captor ArgumentCaptor<PubsubFuture<List<String>>> batchFutureCaptor;
 
   final BlockingQueue<Request> requestQueue = new LinkedBlockingQueue<>();
 
@@ -157,6 +157,51 @@ public class PullerTest {
     r2.future.succeed(b2);
     verify(handler, timeout(1000)).handleMessage(puller, SUBSCRIPTION, b2.get(0).message(), b2.get(0).ackId());
     verify(handler, timeout(1000)).handleMessage(puller, SUBSCRIPTION, b2.get(1).message(), b2.get(1).ackId());
+  }
+
+  @Test
+  public void shouldDecrementOutstandingMessagesOnHandlerError() throws Exception {
+    assertDecrementsOutstandingMessagesOnHandlerError(StackOverflowError::new);
+  }
+
+  @Test
+  public void shouldDecrementOutstandingMessagesOnHandlerRuntimeException() throws Exception {
+    assertDecrementsOutstandingMessagesOnHandlerError(RuntimeException::new);
+  }
+
+  private void assertDecrementsOutstandingMessagesOnHandlerError(Supplier<Throwable> t) throws InterruptedException {
+    puller = Puller.builder()
+        .project(PROJECT)
+        .subscription(SUBSCRIPTION)
+        .pubsub(pubsub)
+        .messageHandler(handler)
+        .concurrency(1)
+        .build();
+
+    // Set up a handler that throws an Error
+    final Semaphore semaphore = new Semaphore(0);
+    when(handler.handleMessage(any(Puller.class), any(String.class), any(Message.class), anyString()))
+        .thenAnswer(invocation -> {
+          semaphore.acquire();
+          throw t.get();
+        });
+
+    // Return a single message
+    final Request r = requestQueue.take();
+    final ReceivedMessage m = ReceivedMessage.of("i1", "m1");
+    CompletableFuture.supplyAsync(() -> r.future.succeed(Collections.singletonList(m)));
+
+    // Wait for the handler to get called
+    verify(handler, timeout(1000)).handleMessage(puller, SUBSCRIPTION, m.message(), m.ackId());
+
+    // Verify that the outstanding message count was incremented
+    assertThat(puller.outstandingMessages(), is(1));
+
+    // Make handler throw
+    semaphore.release();
+
+    // Verify that the outstanding messsage count was decremented
+    await().atMost(30, SECONDS).until(() -> puller.outstandingMessages() == 0);
   }
 
   @Test
