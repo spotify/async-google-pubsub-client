@@ -36,7 +36,7 @@
 
 package com.spotify.google.cloud.pubsub.client.integration;
 
-import com.google.api.client.repackaged.com.google.common.base.Throwables;
+import com.google.common.base.Throwables;
 import com.google.common.io.CharStreams;
 import java.io.IOException;
 import java.io.InputStreamReader;
