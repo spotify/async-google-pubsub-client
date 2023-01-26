@@ -42,10 +42,10 @@ import static org.awaitility.Awaitility.await;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyBoolean;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -63,7 +63,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnitRunner;
 
 @RunWith(MockitoJUnitRunner.class)
 public class PullerTest {
@@ -126,7 +126,7 @@ public class PullerTest {
     // Immediately handle all messages
     when(handler.handleMessage(any(Puller.class), any(String.class), any(Message.class), anyString()))
         .thenAnswer(invocation -> {
-          String ackId = invocation.getArgumentAt(3, String.class);
+          String ackId = invocation.getArgument(3, String.class);
           return CompletableFuture.completedFuture(ackId);
         });
 
@@ -221,7 +221,7 @@ public class PullerTest {
         .thenAnswer(invocation -> {
           final CompletableFuture<Void> f = new CompletableFuture<>();
           futures.add(f);
-          final String ackId = invocation.getArgumentAt(3, String.class);
+          final String ackId = invocation.getArgument(3, String.class);
           return f.thenApply(ignore -> ackId);
         });
 
@@ -271,10 +271,10 @@ public class PullerTest {
     reset(pubsub);
     when(pubsub.pull(anyString(), anyString(), anyBoolean(), anyInt()))
         .thenAnswer(invocation -> {
-          final String project = invocation.getArgumentAt(0, String.class);
-          final String subscription = invocation.getArgumentAt(1, String.class);
-          final boolean returnImmediately = invocation.getArgumentAt(2, Boolean.class);
-          final int maxMessages = invocation.getArgumentAt(3, Integer.class);
+          final String project = invocation.getArgument(0, String.class);
+          final String subscription = invocation.getArgument(1, String.class);
+          final boolean returnImmediately = invocation.getArgument(2, Boolean.class);
+          final int maxMessages = invocation.getArgument(3, Integer.class);
           final String canonicalSubscription = Subscription.canonicalSubscription(project, subscription);
           final String uri = BASE_URI + canonicalSubscription + ":pull";
           final RequestInfo requestInfo = RequestInfo.builder()

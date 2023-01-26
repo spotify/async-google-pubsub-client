@@ -36,26 +36,6 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
-import com.google.common.collect.ImmutableSet;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
-
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.LinkedBlockingQueue;
-
 import static com.google.common.collect.Iterables.concat;
 import static com.spotify.google.cloud.pubsub.client.AssertWithTimeout.assertThatWithin;
 import static java.util.Arrays.asList;
@@ -69,14 +49,32 @@ import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.anyListOf;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import com.google.common.collect.ImmutableSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.LinkedBlockingQueue;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 @RunWith(MockitoJUnitRunner.class)
 public class PublisherTest {
@@ -204,13 +202,13 @@ public class PublisherTest {
 
     // Verify that the batch is not sent
     Thread.sleep(1000);
-    verify(pubsub, never()).publish(anyString(), anyString(), anyListOf(Message.class));
+    verify(pubsub, never()).publish(anyString(), anyString(), anyList());
 
     // Send one more message, completing the batch.
     publisher.publish("t", m2);
 
     // Check that the batch got sent.
-    verify(pubsub, timeout(5000)).publish(anyString(), anyString(), anyListOf(Message.class));
+    verify(pubsub, timeout(5000)).publish(anyString(), anyString(), anyList());
     final Request request = t.take();
     assertThat(request.messages.size(), is(2));
   }
@@ -434,7 +432,7 @@ public class PublisherTest {
 
   private void setUpPubsubClient() {
     reset(pubsub);
-    when(pubsub.publish(anyString(), anyString(), anyListOf(Message.class)))
+    when(pubsub.publish(anyString(), anyString(), anyList()))
         .thenAnswer(invocation -> {
           final String topic = (String) invocation.getArguments()[1];
           @SuppressWarnings("unchecked") final List<Message> messages =

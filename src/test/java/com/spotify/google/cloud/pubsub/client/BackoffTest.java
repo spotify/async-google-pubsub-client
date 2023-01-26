@@ -36,17 +36,13 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
-import com.google.api.client.testing.util.MockSleeper;
 import com.google.api.client.util.Sleeper;
 import java.util.Random;
 import org.junit.Test;
@@ -54,7 +50,7 @@ import org.junit.runner.RunWith;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnitRunner;
 
 @RunWith(MockitoJUnitRunner.class)
 public class BackoffTest {
@@ -117,10 +113,9 @@ public class BackoffTest {
 
   @Test
    public void testNoBackoff() throws Exception {
-    when(random.nextDouble()).thenReturn(0.5);
     noBackoff.reset();
     noBackoff.sleep();
     noBackoff.sleep();
-    verifyZeroInteractions(sleeper);
+    verifyNoInteractions(sleeper);
   }
 }
