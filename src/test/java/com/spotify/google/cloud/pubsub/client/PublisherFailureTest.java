@@ -40,7 +40,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
 
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -50,12 +49,13 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeoutException;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import static java.util.Collections.singletonList;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.anyListOf;
-import static org.mockito.Matchers.anyString;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -83,7 +83,7 @@ public class PublisherFailureTest {
         .payloadSize(4711)
         .build();
 
-    when(pubsub.publish(anyString(), anyString(), anyListOf(Message.class)))
+    when(pubsub.publish(anyString(), anyString(), anyList()))
         .thenAnswer(invocation -> {
           final String topic = (String) invocation.getArguments()[1];
           final PubsubFuture<List<String>> future = new PubsubFuture<>(requestInfo);

@@ -50,7 +50,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
-import org.mockito.runners.MockitoJUnitRunner;
 
 import java.net.URL;
 import java.util.List;
@@ -59,6 +58,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
 import okio.Buffer;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import static com.google.common.net.HttpHeaders.ACCEPT_ENCODING;
 import static com.google.common.net.HttpHeaders.AUTHORIZATION;

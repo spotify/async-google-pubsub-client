@@ -44,9 +44,9 @@ import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyListOf;
-import static org.mockito.Matchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
@@ -67,7 +67,7 @@ import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnitRunner;
 
 @RunWith(MockitoJUnitRunner.class)
 public class AckerTest {
@@ -134,15 +134,15 @@ public class AckerTest {
 
     // Verify that the batch is not sent
     Thread.sleep(1000);
-    verify(pubsub, never()).acknowledge(anyString(), anyString(), anyListOf(String.class));
-    verify(pubsub, never()).acknowledge(anyString(), anyString(), anyListOf(String.class));
     verify(pubsub, never()).acknowledge(anyString(), anyString(), any(String[].class));
+    verify(pubsub, never()).acknowledge(anyString(), anyString(), anyList());
+    verify(pubsub, never()).acknowledge(anyString(), anyList());
 
     // Ack one more message, completing the batch.
     acker.acknowledge("m2");
 
     // Check that the batch got sent.
-    verify(pubsub, timeout(5000)).acknowledge(anyString(), anyString(), anyListOf(String.class));
+    verify(pubsub, timeout(5000)).acknowledge(anyString(), anyString(), anyList());
     final Request request = requestQueue.take();
     assertThat(request.ids.size(), is(2));
   }
@@ -196,12 +196,12 @@ public class AckerTest {
 
   private void setUpPubsubClient() {
     reset(pubsub);
-    when(pubsub.acknowledge(anyString(), anyString(), anyListOf(String.class)))
+    when(pubsub.acknowledge(anyString(), anyString(), anyList()))
         .thenAnswer(invocation -> {
-          final String project = invocation.getArgumentAt(0, String.class);
-          final String subscription = invocation.getArgumentAt(1, String.class);
+          final String project = invocation.getArgument(0, String.class);
+          final String subscription = invocation.getArgument(1, String.class);
           @SuppressWarnings("unchecked") final List<String> ackIds =
-              (List<String>) invocation.getArgumentAt(2, List.class);
+              (List<String>) invocation.getArgument(2, List.class);
           final String canonicalSubscription = Subscription.canonicalSubscription(project, subscription);
           final String uri = BASE_URI + canonicalSubscription + ":acknowledge";
           final RequestInfo requestInfo = RequestInfo.builder()
