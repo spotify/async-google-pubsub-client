@@ -99,12 +99,12 @@ public class PubsubIT {
 
   private static final String PROJECT = Util.defaultProject();
 
-  private static final String TOPIC = TEST_NAME_PREFIX + toHexString(ThreadLocalRandom.current().nextLong());
-  private static final String SUBSCRIPTION = TEST_NAME_PREFIX + toHexString(ThreadLocalRandom.current().nextLong());
 
   private static GoogleCredential CREDENTIAL;
 
   private Pubsub pubsub;
+  private String topicName;
+  private String subscriptionName;
 
   @BeforeClass
   public static void setUpCredentials() throws IOException {
@@ -118,13 +118,15 @@ public class PubsubIT {
         .maxConnections(CONCURRENCY)
         .credential(CREDENTIAL)
         .build();
+    topicName = TEST_NAME_PREFIX + toHexString(ThreadLocalRandom.current().nextLong());
+    subscriptionName = TEST_NAME_PREFIX + toHexString(ThreadLocalRandom.current().nextLong());
   }
 
   @After
   public void tearDown() throws ExecutionException, InterruptedException {
     if (pubsub != null) {
-      pubsub.deleteSubscription(PROJECT, SUBSCRIPTION).exceptionally(t -> null).get();
-      pubsub.deleteTopic(PROJECT, TOPIC).exceptionally(t -> null).get();
+      pubsub.deleteSubscription(PROJECT, subscriptionName).exceptionally(t -> null).get();
+      pubsub.deleteTopic(PROJECT, topicName).exceptionally(t -> null).get();
       pubsub.close();
     }
   }
@@ -134,18 +136,18 @@ public class PubsubIT {
     testCreateGetListDeleteTopics(pubsub);
   }
 
-  private static void testCreateGetListDeleteTopics(final Pubsub pubsub) throws Exception {
+  private void testCreateGetListDeleteTopics(final Pubsub pubsub) throws Exception {
 
     // Create topic
-    final Topic expected = Topic.of(PROJECT, TOPIC);
+    final Topic expected = Topic.of(PROJECT, topicName);
     {
-      final Topic topic = pubsub.createTopic(PROJECT, TOPIC).get();
+      final Topic topic = pubsub.createTopic(PROJECT, topicName).get();
       assertThat(topic, is(expected));
     }
 
     // Get topic
     {
-      final Topic topic = pubsub.getTopic(PROJECT, TOPIC).get();
+      final Topic topic = pubsub.getTopic(PROJECT, topicName).get();
       assertThat(topic, is(expected));
     }
 
@@ -157,12 +159,12 @@ public class PubsubIT {
 
     // Delete topic
     {
-      pubsub.deleteTopic(PROJECT, TOPIC).get();
+      pubsub.deleteTopic(PROJECT, topicName).get();
     }
 
     // Verify that topic is gone
     {
-      final Topic topic = pubsub.getTopic(PROJECT, TOPIC).get();
+      final Topic topic = pubsub.getTopic(PROJECT, topicName).get();
       assertThat(topic, is(nullValue()));
     }
     {
@@ -188,19 +190,19 @@ public class PubsubIT {
   @Test
   public void testCreateGetListDeleteSubscriptions() throws Exception {
     // Create topic to subscribe to
-    final Topic topic = pubsub.createTopic(PROJECT, TOPIC).get();
+    final Topic topic = pubsub.createTopic(PROJECT, topicName).get();
 
     // Create subscription
-    final Subscription expected = Subscription.of(PROJECT, SUBSCRIPTION, TOPIC);
+    final Subscription expected = Subscription.of(PROJECT, subscriptionName, topicName);
     {
-      final Subscription subscription = pubsub.createSubscription(PROJECT, SUBSCRIPTION, TOPIC).get();
+      final Subscription subscription = pubsub.createSubscription(PROJECT, subscriptionName, topicName).get();
       assertThat(subscription.name(), is(expected.name()));
       assertThat(subscription.topic(), is(expected.topic()));
     }
 
     // Get subscription
     {
-      final Subscription subscription = pubsub.getSubscription(PROJECT, SUBSCRIPTION).get();
+      final Subscription subscription = pubsub.getSubscription(PROJECT, subscriptionName).get();
       assertThat(subscription.name(), is(expected.name()));
       assertThat(subscription.topic(), is(expected.topic()));
     }
@@ -216,12 +218,12 @@ public class PubsubIT {
 
     // Delete subscription
     {
-      pubsub.deleteSubscription(PROJECT, SUBSCRIPTION).get();
+      pubsub.deleteSubscription(PROJECT, subscriptionName).get();
     }
 
     // Verify that subscription is gone
     {
-      final Subscription subscription = pubsub.getSubscription(PROJECT, SUBSCRIPTION).get();
+      final Subscription subscription = pubsub.getSubscription(PROJECT, subscriptionName).get();
       assertThat(subscription, is(nullValue()));
     }
     {
@@ -248,25 +250,25 @@ public class PubsubIT {
 
   @Test
   public void testPublish() throws IOException, ExecutionException, InterruptedException {
-    pubsub.createTopic(PROJECT, TOPIC).get();
+    pubsub.createTopic(PROJECT, topicName).get();
     final String data = BaseEncoding.base64().encode("hello world".getBytes("UTF-8"));
     final Message message = new MessageBuilder().data(data).build();
-    final List<String> response = pubsub.publish(PROJECT, TOPIC, message).get();
+    final List<String> response = pubsub.publish(PROJECT, topicName, message).get();
     out.println(response);
   }
 
   @Test
   public void testPullSingle() throws IOException, ExecutionException, InterruptedException {
     // Create topic and subscription
-    pubsub.createTopic(PROJECT, TOPIC).get();
-    pubsub.createSubscription(PROJECT, SUBSCRIPTION, TOPIC).get();
+    pubsub.createTopic(PROJECT, topicName).get();
+    pubsub.createSubscription(PROJECT, subscriptionName, topicName).get();
 
     // Publish a message
     final String data = BaseEncoding.base64().encode("hello world".getBytes("UTF-8"));
     final Message message = Message.of(data);
-    final List<String> ids = pubsub.publish(PROJECT, TOPIC, message).get();
+    final List<String> ids = pubsub.publish(PROJECT, topicName, message).get();
     final String id = ids.get(0);
-    final List<ReceivedMessage> response = pubsub.pull(PROJECT, SUBSCRIPTION, false).get();
+    final List<ReceivedMessage> response = pubsub.pull(PROJECT, subscriptionName, false).get();
 
     // Verify received message
     assertThat(response.size(), is(1));
@@ -276,26 +278,26 @@ public class PubsubIT {
     assertThat(response.get(0).ackId(), not(isEmptyOrNullString()));
 
     // Modify ack deadline
-    pubsub.modifyAckDeadline(PROJECT, SUBSCRIPTION, 30, response.get(0).ackId()).get();
+    pubsub.modifyAckDeadline(PROJECT, subscriptionName, 30, response.get(0).ackId()).get();
 
     // Ack message
-    pubsub.acknowledge(PROJECT, SUBSCRIPTION, response.get(0).ackId()).get();
+    pubsub.acknowledge(PROJECT, subscriptionName, response.get(0).ackId()).get();
   }
 
   @Test
   public void testPullBatch() throws IOException, ExecutionException, InterruptedException {
-    pubsub.createTopic(PROJECT, TOPIC).get();
-    pubsub.createSubscription(PROJECT, SUBSCRIPTION, TOPIC).get();
+    pubsub.createTopic(PROJECT, topicName).get();
+    pubsub.createSubscription(PROJECT, subscriptionName, topicName).get();
     final List<Message> messages = ImmutableList.of(Message.ofEncoded("m0"),
                                                     Message.ofEncoded("m1"),
                                                     Message.ofEncoded("m2"));
-    final List<String> ids = pubsub.publish(PROJECT, TOPIC, messages).get();
+    final List<String> ids = pubsub.publish(PROJECT, topicName, messages).get();
     final Map<String, ReceivedMessage> received = new HashMap<>();
 
     // Pull until we've received 3 messages or time out. Store received messages in a map as they might be out of order.
     final long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
     while (true) {
-      final List<ReceivedMessage> response = pubsub.pull(PROJECT, SUBSCRIPTION).get();
+      final List<ReceivedMessage> response = pubsub.pull(PROJECT, subscriptionName).get();
       for (final ReceivedMessage message : response) {
         received.put(message.message().messageId().get(), message);
       }
@@ -321,10 +323,10 @@ public class PubsubIT {
         .collect(Collectors.toList());
 
     // Batch modify ack deadline
-    pubsub.modifyAckDeadline(PROJECT, SUBSCRIPTION, 30, ackIds).get();
+    pubsub.modifyAckDeadline(PROJECT, subscriptionName, 30, ackIds).get();
 
     // Batch ack the messages
-    pubsub.acknowledge(PROJECT, SUBSCRIPTION, ackIds).get();
+    pubsub.acknowledge(PROJECT, subscriptionName, ackIds).get();
   }
 
   @Test
@@ -334,10 +336,10 @@ public class PubsubIT {
         .credential(CREDENTIAL)
         .compressionLevel(BEST_SPEED)
         .build();
-    pubsub.createTopic(PROJECT, TOPIC).get();
+    pubsub.createTopic(PROJECT, topicName).get();
     final String data = BaseEncoding.base64().encode(Strings.repeat("hello world", 100).getBytes("UTF-8"));
     final Message message = new MessageBuilder().data(data).build();
-    final PubsubFuture<List<String>> future = pubsub.publish(PROJECT, TOPIC, message);
+    final PubsubFuture<List<String>> future = pubsub.publish(PROJECT, topicName, message);
     out.println("raw size: " + data.length());
     out.println("payload size: " + future.payloadSize());
   }
