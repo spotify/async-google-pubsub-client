@@ -40,7 +40,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 
 
 import com.swrve.ratelimitedlogger.RateLimitedLog;
-import org.joda.time.Duration;
+import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,7 +75,7 @@ public class Puller implements Closeable {
   }
 
   private static final int MAX_LOG_RATE = 3;
-  private static final Duration MAX_LOG_DURATION = Duration.millis(2000);
+  private static final Duration MAX_LOG_DURATION = Duration.ofMillis(2000);
 
   private static final Logger logger = LoggerFactory.getLogger(Puller.class);
   private static final Logger LOG = RateLimitedLog.withRateLimit(logger)
