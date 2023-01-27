@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import io.norberg.automatter.AutoMatter;
+import javax.annotation.Nullable;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -55,6 +56,7 @@ public interface Message {
 
   CharMatcher BASE64_MATCHER = CharMatcher.anyOf("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=");
 
+  @Nullable
   String data();
 
   Map<String, String> attributes();
